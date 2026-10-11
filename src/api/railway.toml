@@ -1,0 +1,6 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "dotnet publish src/api/ProjectTracker.Api.csproj -c Release"
+
+[deploy]
+startCommand = "dotnet ProjectTracker.Api.dll"
