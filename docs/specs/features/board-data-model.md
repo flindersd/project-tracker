@@ -424,6 +424,11 @@ The suite currently **fails to compile** — captured verbatim in this run's out
 - Left `MoveInitiativeAsync` unchanged so the initiative-level move state machine continues to use `InitiativeMoveService` correctly for whole-initiative moves.
 - Re-ran the API build and test commands; both passed with 0 build warnings/errors and 29/29 tests green.
 
+### Round 5 fixes
+- Corrected `CreateTaskAsync`'s ordering-scope query: `ComputeSortOrderAsync` was filtering the ordering scope by `request.TaskSubStageId` (the raw, possibly-null request value) instead of the resolved `taskSubStage?.Id` (which defaults to the destination column's first ordered sub-stage when the request omits it). This mismatch could generate a sort key in the `NULL` sub-stage scope while persisting the task into a non-null sub-stage scope, violating the `(board_id, initiative_id, task_sub_stage_id, sort_order)` ordering-scope uniqueness guarantee (FR-13).
+- Fix: introduced `resolvedTaskSubStageId = taskSubStage?.Id` and used it consistently for both the ordering-scope query and the persisted task's `TaskSubStageId`.
+- Re-ran the API build and test commands; both passed with 0 build warnings/errors and 29/29 tests green.
+
 ### Files changed
 - `src/api/Program.cs` — registered board services and startup wiring.
 - `src/api/ProjectTracker.Api.csproj` — added EF Core / Npgsql packages and disabled apphost generation for local CLI stability.

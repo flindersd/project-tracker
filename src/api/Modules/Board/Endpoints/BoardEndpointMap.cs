@@ -512,8 +512,10 @@ public static class BoardEndpointMap
             }
         }
 
+        var resolvedTaskSubStageId = taskSubStage?.Id;
+
         var sortOrder = await ComputeSortOrderAsync(
-            db.Tasks.AsNoTracking().Where(x => x.BoardId == boardId && x.InitiativeId == request.InitiativeId && x.TaskSubStageId == request.TaskSubStageId),
+            db.Tasks.AsNoTracking().Where(x => x.BoardId == boardId && x.InitiativeId == request.InitiativeId && x.TaskSubStageId == resolvedTaskSubStageId),
             request.AfterId,
             request.BeforeId,
             task => task.Id,
