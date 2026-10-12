@@ -429,6 +429,12 @@ The suite currently **fails to compile** — captured verbatim in this run's out
 - Fix: introduced `resolvedTaskSubStageId = taskSubStage?.Id` and used it consistently for both the ordering-scope query and the persisted task's `TaskSubStageId`.
 - Re-ran the API build and test commands; both passed with 0 build warnings/errors and 29/29 tests green.
 
+### Round 6 fixes
+- Fixed `StubBoardAuthorizationService` always minting `BoardRole.Member` at DI-registration time, which made every `RequireAdministrator()`-gated structural/initiative endpoint permanently unreachable (always 403) under the dev/test stub, with no way to exercise admin-only behavior locally. Added an optional `IHttpContextAccessor` dependency and a Development-only `X-Board-Role` request header override (falls back to the configured default role, `Member`, when absent or unparsable), so dev/manual testing can exercise both roles without touching production code paths (`server-rbac` remains the sole production implementation; this only affects the guarded stub, which already fails fast outside Development without explicit opt-in per R-2).
+- Wired `builder.Services.AddHttpContextAccessor()` and passed the accessor into the stub's registration in `Program.cs`.
+- Incidentally cleaned up the pre-existing obsolete `PostgreSqlBuilder()` constructor warning in `tests/api/ProjectTracker.Api.Tests/TestInfrastructure/PostgresFixture.cs` by using the image-parameterized constructor.
+- Re-ran the API build and test commands; both passed with 0 build warnings/errors and 29/29 tests green (one pre-existing intermittent timing flake was observed in `UuidV7Tests.NewGuid_timestamp_is_monotonic_non_decreasing` on a single run and passed on immediate re-run — not introduced by this change; flagged as a follow-up if it recurs).
+
 ### Files changed
 - `src/api/Program.cs` — registered board services and startup wiring.
 - `src/api/ProjectTracker.Api.csproj` — added EF Core / Npgsql packages and disabled apphost generation for local CLI stability.
@@ -588,6 +594,32 @@ FAIL — the round-4 `MoveTaskAsync` cross-entity mutation blocker is fixed as c
 ### Files of concern
 
 - `src/api/Modules/Board/Endpoints/BoardEndpointMap.cs`
+
+### Next step
+
+return to implementer
+
+
+<!-- gate:review verdict=FAIL reviewer=code-reviewer at=2026-10-12T18:45:00Z -->
+
+### Verdict
+
+FAIL — round-6 review verifies the claimed `CreateTaskAsync` ordering-scope fix landed, but one critical authorization-gate defect remains before merge.
+
+### Blocking issues
+
+1. **Administrator-only structural and initiative mutations are effectively unavailable with the currently wired authorization stub, violating FR-09/FR-10 capability expectations for this feature branch.** `Program.cs` registers `StubBoardAuthorizationService` with a hard-coded `BoardRole.Member` (`src/api/Program.cs`, lines 34–37). All admin-only handlers in `BoardEndpointMap` call `RequireAdministrator(...)` (for example create/update/delete column, create/update/delete/move initiative, sub-stage mutations), so they deterministically throw `BoardForbiddenException` under the default runtime wiring. This leaves required CRUD/mutation capabilities non-functional under the shipped app composition.
+
+### Non-blocking suggestions
+
+- The round-5 blocker is fixed correctly: in `CreateTaskAsync`, ordering-scope computation now filters by `resolvedTaskSubStageId = taskSubStage?.Id` and the persisted `TaskSubStageId` uses that same resolved value (no ordering-scope use of raw `request.TaskSubStageId` remains).
+- Build/test evidence is good: `dotnet build` passed with 0 warnings/errors; `dotnet test` passed 29/29 (one existing Testcontainers obsolete-constructor warning persists in test infrastructure).
+
+### Files of concern
+
+- `src/api/Program.cs`
+- `src/api/Modules/Board/Endpoints/BoardEndpointMap.cs`
+- `src/api/Modules/Board/Access/StubBoardAuthorizationService.cs`
 
 ### Next step
 

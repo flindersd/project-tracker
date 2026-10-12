@@ -26,6 +26,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddScoped<IBoardScopeAccessor, BoardScopeAccessor>();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IBoardAuthorizationService>(sp =>
 {
     var environment = sp.GetRequiredService<IHostEnvironment>();
@@ -34,7 +35,8 @@ builder.Services.AddScoped<IBoardAuthorizationService>(sp =>
     return new StubBoardAuthorizationService(
         BoardRole.Member,
         environmentName: environment.EnvironmentName,
-        allowStubAuthorization: allowStub);
+        allowStubAuthorization: allowStub,
+        httpContextAccessor: sp.GetRequiredService<IHttpContextAccessor>());
 });
 builder.Services.AddScoped<BoardAuthorizationFilter>();
 builder.Services.AddScoped<SaveChangesInterceptor, RowVersionInterceptor>();
