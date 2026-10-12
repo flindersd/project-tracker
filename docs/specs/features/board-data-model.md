@@ -564,6 +564,30 @@ FAIL — fourth-round independent review found the requested round-3 fixes lande
 
 return to implementer
 
+
+<!-- gate:review verdict=FAIL reviewer=code-reviewer at=2026-10-12T17:20:00Z -->
+
+### Verdict
+
+FAIL — the round-4 `MoveTaskAsync` cross-entity mutation blocker is fixed as claimed, but this fifth-round review found a remaining blocking contract defect in task creation ordering scope.
+
+### Blocking issues
+
+1. **`CreateTaskAsync` computes `sortOrder` from the wrong ordering scope when `TaskSubStageId` is omitted, which can violate FR-13 ordering guarantees and trigger unique-key write failures.** In `BoardEndpointMap.cs`, the handler correctly defaults `taskSubStage` to the destination column’s first ordered sub-stage (`lines 502–513`), but then calls `ComputeSortOrderAsync` using `request.TaskSubStageId` (`line 516`) instead of the resolved `taskSubStage?.Id`. This computes ordering in the `NULL` sub-stage scope while persisting the new task into a non-null sub-stage scope, so subsequent inserts/moves can collide on `(board_id, initiative_id, task_sub_stage_id, sort_order)`.
+
+### Non-blocking suggestions
+
+- `MoveTaskAsync` cleanup is correct: it no longer calls `InitiativeMoveService.Move`, no longer applies `ApplyInitiativeMove`/`ApplyTaskChanges`, and no longer loads `sourceTasks`/`LoadSubStageLookupAsync` in the task-move path.
+- Consider removing now-unused helper methods in `BoardEndpointMap` (`ApplyInitiativeMove`, `ApplyTaskChanges`, `LoadSubStageLookupAsync`) if they are no longer needed outside initiative-move flow, to reduce future coupling risk.
+
+### Files of concern
+
+- `src/api/Modules/Board/Endpoints/BoardEndpointMap.cs`
+
+### Next step
+
+return to implementer
+
 ## 7. Release Notes
 
 _Pending — run `/release`._
