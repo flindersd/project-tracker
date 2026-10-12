@@ -471,6 +471,29 @@ FAIL — implementation is not releasable yet.
 - `src/api/Modules/Board/Persistence/Configurations/TaskTagConfiguration.cs`
 - `src/api/Modules/Board/Persistence/Migrations/20261011193000_InitialCreate.cs`
 
+<!-- gate:review verdict=FAIL reviewer=code-reviewer at=2026-10-12T04:46:49Z -->
+
+### Verdict
+
+FAIL — re-review found prior blockers 2–4 resolved, but the new API surface still violates the approved contract and authorization semantics.
+
+### Blocking issues
+
+1. **Initiative mutations are not consistently administrator-gated (FR-10 / TD-F):** `CreateInitiativeAsync` and `UpdateInitiativeAsync` do not call `RequireAdministrator(...)` and are mapped without admin enforcement, while initiative mutations are explicitly admin-only in the approved scope.
+2. **Authorization errors are mapped to the wrong problem type/status:** `BoardProblemDetailsExceptionHandler` maps `BoardForbiddenException` to `422 /problems/board-structure-violation`. Structural-violation 422 is reserved for board-structure rule failures; authorization failures must not be emitted as structural violations.
+3. **Column type-change task selection is incorrect, breaking structural transition logic:** `UpdateColumnAsync` loads tasks with `x.InitiativeId == columnId` (column id compared to initiative id). This fails to select actual tasks in initiatives within that column, so dormancy/carry-over mutations can be skipped incorrectly during column type changes.
+
+### Non-blocking suggestions
+
+- Remove or justify unrelated `src/web/package.json` changes before release if they are not required for board-data-model scope.
+- Drop unused `ResolveAccessContextAsync` in `BoardEndpointMap` (CS1998 warning) to keep endpoint code clean.
+
+### Files of concern
+
+- `src/api/Modules/Board/Endpoints/BoardEndpointMap.cs`
+- `src/api/Modules/Board/Endpoints/BoardProblemDetailsExceptionHandler.cs`
+- `src/api/Program.cs`
+
 ## 7. Release Notes
 
 _Pending — run `/release`._
