@@ -404,16 +404,24 @@ The suite currently **fails to compile** — captured verbatim in this run's out
 - Chunk 3 — Ordering & structural state machine: fractional ordering, initiative moves, column type changes, deletion guards, and inactive sub-stage rules.
 - Chunk 4 — API surface: board-scoped minimal API endpoint groups, CRUD scaffolding for boards/columns/sub-stages/initiatives/tasks/tags/assignees, explicit initiative/task move endpoints, authorization filter wiring, and RFC 9457 `ProblemDetails` mapping for structural rule failures.
 
+### Round 2 fixes
+- Added administrator gating to initiative mutations in `BoardEndpointMap` so `CreateInitiativeAsync`, `UpdateInitiativeAsync`, and initiative `:move` all enforce `BoardAccessContext.RequireAdministrator()` per FR-10 / TD-F.
+- Corrected the column type-change task selection query to load tasks from initiatives whose `ColumnId` matches the changed column, rather than comparing `Task.InitiativeId` to the column id.
+- Removed the unused `ResolveAccessContextAsync` helper from `BoardEndpointMap`, eliminating the CS1998 warning path.
+- Kept `src/web/package.json` aligned with the main-branch workspace contract dependency (`"@initiative-tracker/contracts": "workspace:*"`); no branch-only drift remains.
+- Changed `BoardProblemDetailsExceptionHandler` so `BoardStructuralViolationException` maps to `422 /problems/board-structure-violation`, while `BoardForbiddenException` maps to `403 /problems/forbidden`.
+- Added `<UseAppHost>false</UseAppHost>` to `src/api/ProjectTracker.Api.csproj` so local build/test execution is stable on this environment.
+
 ### Files changed
 - `src/api/Program.cs` — registered board services and startup wiring.
-- `src/api/ProjectTracker.Api.csproj` — added EF Core / Npgsql packages.
+- `src/api/ProjectTracker.Api.csproj` — added EF Core / Npgsql packages and disabled apphost generation for local CLI stability.
 - `src/api/Shared/UuidV7.cs` — UUIDv7 helper.
 - `src/api/Modules/Board/Access/*` — access context, authorization service, scope accessor, stub guard, and exception types.
 - `src/api/Modules/Board/Domain/*` — board entities, enums, and invariants.
 - `src/api/Modules/Board/Persistence/*` — `BoardDbContext`, interceptor, configurations, and initial migration.
 - `src/api/Modules/Board/Ordering/*` — fractional key generation and ordering service.
 - `src/api/Modules/Board/Services/*` — initiative move, column type change, and deletion guard logic.
-- `src/api/Modules/Board/Endpoints/*` — board endpoint map, DTOs, and board-structure `ProblemDetails` handler.
+- `src/api/Modules/Board/Endpoints/*` — board endpoint map, DTOs, and `ProblemDetails` handler updates for initiative authorization and forbidden mapping.
 - `src/api/Modules/Board/ModuleMarker.cs` — board endpoint registration extension.
 - `tests/api/ProjectTracker.Api.Tests/Board/*` — approval-gate tests and compile targets written by tester.
 - `tests/api/ProjectTracker.Api.Tests/TestInfrastructure/PostgresFixture.cs` — PostgreSQL fixture wiring.
@@ -430,7 +438,7 @@ The suite currently **fails to compile** — captured verbatim in this run's out
   - `dotnet build src/api/ProjectTracker.Api.csproj`
   - `dotnet test tests/api/ProjectTracker.Api.Tests/ProjectTracker.Api.Tests.csproj`
 - Build status: PASS
-- Test status: PASS (29/29)
+- Test status: PASS (29/29) with 1 warning from the existing Testcontainers PostgreSQL fixture (`PostgreSqlBuilder` obsolete constructor)
 - New tests added beyond Section 4: no
 - Final build/test timestamp: 2026-10-12T00:00:00Z
 

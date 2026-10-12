@@ -209,7 +209,11 @@ public static class BoardEndpointMap
         if (column.Type != request.ColumnType)
         {
             var subStages = await db.TaskSubStages.Where(x => x.BoardId == boardId && x.ParentColumnId == columnId).ToListAsync(cancellationToken);
-            var tasks = await db.Tasks.Where(x => x.BoardId == boardId && x.InitiativeId == columnId).ToListAsync(cancellationToken);
+            var initiativeIds = await db.Initiatives
+                .Where(x => x.BoardId == boardId && x.ColumnId == columnId)
+                .Select(x => x.Id)
+                .ToListAsync(cancellationToken);
+            var tasks = await db.Tasks.Where(x => x.BoardId == boardId && initiativeIds.Contains(x.InitiativeId)).ToListAsync(cancellationToken);
 
             if (request.ColumnType == ColumnType.InitiativeOnly)
             {
@@ -357,8 +361,10 @@ public static class BoardEndpointMap
         return TypedResults.Ok<IEnumerable<InitiativeResponse>>(initiatives);
     }
 
-    private static async Task<Results<Created<InitiativeResponse>, NotFound>> CreateInitiativeAsync(Guid boardId, CreateInitiativeRequest request, BoardDbContext db, OrderingService orderingService, CancellationToken cancellationToken)
+    private static async Task<Results<Created<InitiativeResponse>, NotFound, UnauthorizedHttpResult>> CreateInitiativeAsync(Guid boardId, CreateInitiativeRequest request, HttpContext httpContext, BoardDbContext db, OrderingService orderingService, CancellationToken cancellationToken)
     {
+        RequireAdministrator(httpContext);
+
         var column = await db.BoardColumns.AsNoTracking().FirstOrDefaultAsync(x => x.BoardId == boardId && x.Id == request.ColumnId, cancellationToken);
         if (column is null)
         {
@@ -398,8 +404,10 @@ public static class BoardEndpointMap
         return initiative is null ? TypedResults.NotFound() : TypedResults.Ok(ToInitiativeResponse(initiative));
     }
 
-    private static async Task<Results<Ok<InitiativeResponse>, NotFound>> UpdateInitiativeAsync(Guid boardId, Guid initiativeId, UpdateInitiativeRequest request, BoardDbContext db, CancellationToken cancellationToken)
+    private static async Task<Results<Ok<InitiativeResponse>, NotFound, UnauthorizedHttpResult>> UpdateInitiativeAsync(Guid boardId, Guid initiativeId, UpdateInitiativeRequest request, HttpContext httpContext, BoardDbContext db, CancellationToken cancellationToken)
     {
+        RequireAdministrator(httpContext);
+
         var initiative = await db.Initiatives.FirstOrDefaultAsync(x => x.BoardId == boardId && x.Id == initiativeId, cancellationToken);
         if (initiative is null)
         {
@@ -769,9 +777,6 @@ public static class BoardEndpointMap
         await db.SaveChangesAsync(cancellationToken);
         return TypedResults.NoContent();
     }
-
-    private static async Task<BoardAccessContext?> ResolveAccessContextAsync(HttpContext httpContext)
-        => httpContext.Items.TryGetValue(BoardAuthorizationFilter.HttpContextItemKey, out var value) ? value as BoardAccessContext : null;
 
     private static bool TryGetAccessContext(HttpContext httpContext, out BoardAccessContext accessContext)
     {

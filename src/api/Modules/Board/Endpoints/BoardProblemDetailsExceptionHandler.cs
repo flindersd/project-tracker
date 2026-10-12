@@ -9,9 +9,14 @@ public sealed class BoardProblemDetailsExceptionHandler : IExceptionHandler
 {
     public ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        if (exception is BoardStructuralViolationException or BoardForbiddenException)
+        if (exception is BoardStructuralViolationException)
         {
             return WriteProblem(httpContext, StatusCodes.Status422UnprocessableEntity, "/problems/board-structure-violation", "Board structural violation");
+        }
+
+        if (exception is BoardForbiddenException)
+        {
+            return WriteProblem(httpContext, StatusCodes.Status403Forbidden, "/problems/forbidden", "Forbidden");
         }
 
         return ValueTask.FromResult(false);
