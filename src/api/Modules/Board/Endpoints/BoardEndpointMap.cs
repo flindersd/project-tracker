@@ -594,7 +594,6 @@ public static class BoardEndpointMap
             return TypedResults.NotFound();
         }
 
-        var sourceTasks = await db.Tasks.Where(x => x.BoardId == boardId && x.InitiativeId == task.InitiativeId).ToListAsync(cancellationToken);
         var sourceColumn = await db.BoardColumns.AsNoTracking().FirstOrDefaultAsync(x => x.BoardId == boardId && x.Id == initiative.ColumnId, cancellationToken);
         if (sourceColumn is null)
         {
@@ -635,20 +634,28 @@ public static class BoardEndpointMap
         }
 
         var destinationSubStages = await db.TaskSubStages.AsNoTracking().Where(x => x.BoardId == boardId && x.ParentColumnId == destinationColumn.Id).ToListAsync(cancellationToken);
-        var lookup = await LoadSubStageLookupAsync(db, boardId, sourceTasks, cancellationToken);
-
-        var moved = new InitiativeMoveResult(initiative, sourceTasks);
-        if (destinationInitiative.Id != initiative.Id || destinationColumn.Id != sourceColumn.Id)
-        {
-            moved = InitiativeMoveService.Move(initiative, sourceTasks, destinationColumn, destinationSubStages, id => id is null ? null : lookup.TryGetValue(id.Value, out var subStage) ? subStage : null);
-        }
-
-        ApplyInitiativeMove(initiative, moved.Initiative);
-        ApplyTaskChanges(sourceTasks, moved.Tasks);
 
         if (request.TaskSubStageId is not null)
         {
             task.TaskSubStageId = destinationSubStage?.Id;
+        }
+        else if (destinationInitiative.Id != initiative.Id)
+        {
+            if (destinationColumn.Type == ColumnType.InitiativeOnly)
+            {
+                task.DormantSubStageId ??= task.TaskSubStageId;
+                task.TaskSubStageId = null;
+            }
+            else if (destinationColumn.Id != sourceColumn.Id)
+            {
+                var firstDestinationSubStage = destinationSubStages.OrderBy(x => x.SortOrder, StringComparer.Ordinal).FirstOrDefault();
+                if (firstDestinationSubStage is null)
+                {
+                    throw new BoardStructuralViolationException();
+                }
+
+                task.TaskSubStageId = firstDestinationSubStage.Id;
+            }
         }
 
         task.InitiativeId = destinationInitiative.Id;

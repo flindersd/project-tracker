@@ -418,6 +418,12 @@ The suite currently **fails to compile** — captured verbatim in this run's out
 - Removed `ColumnId` from `UpdateInitiativeRequest` and deleted the `UpdateInitiativeAsync` mutation path that assigned `initiative.ColumnId` directly, so initiative moves now flow only through the explicit `:move` endpoint and `InitiativeMoveService`.
 - Verified the API builds cleanly and the full API test suite still passes after the change set.
 
+### Round 4 fixes
+- Corrected `MoveTaskAsync` to mutate only the single task being moved. The endpoint no longer calls `InitiativeMoveService.Move(...)`, no longer loads `sourceTasks`/`LoadSubStageLookupAsync`, and no longer applies initiative-wide `ApplyInitiativeMove` / `ApplyTaskChanges` updates.
+- Preserved the task-level move rules required by AC/FR-16: explicit `TaskSubStageId` still validates against the destination column; cross-initiative moves without an explicit sub-stage now use the destination column's first ordered sub-stage; moves into an `initiative_only` column now apply dormancy directly to the moved task only.
+- Left `MoveInitiativeAsync` unchanged so the initiative-level move state machine continues to use `InitiativeMoveService` correctly for whole-initiative moves.
+- Re-ran the API build and test commands; both passed with 0 build warnings/errors and 29/29 tests green.
+
 ### Files changed
 - `src/api/Program.cs` — registered board services and startup wiring.
 - `src/api/ProjectTracker.Api.csproj` — added EF Core / Npgsql packages and disabled apphost generation for local CLI stability.
