@@ -502,6 +502,31 @@ FAIL — re-review found prior blockers 2–4 resolved, but the new API surface 
 - `src/api/Modules/Board/Endpoints/BoardProblemDetailsExceptionHandler.cs`
 - `src/api/Program.cs`
 
+<!-- gate:review verdict=FAIL reviewer=code-reviewer at=2026-10-12T10:30:00Z -->
+
+### Verdict
+
+FAIL — third-round review confirms the claimed round-2 fixes landed, but the endpoint contract still has blocking TD-F/FR violations.
+
+### Blocking issues
+
+1. **Wrong status code for missing board-scoped ids in sub-stage creation:** `CreateSubStageAsync` returns `401 Unauthorized` when the parent column is absent (`BoardEndpointMap.cs`, line 278). TD-F requires `404` for board-scoped ids not visible/in-scope, with no auth-leaking status variance.
+2. **Wrong error classification in task move endpoint for missing destination ids:** `MoveTaskAsync` converts missing destination initiative/sub-stage ids into `BoardStructuralViolationException` (`BoardEndpointMap.cs`, lines 612-624), producing `422`. Under TD-F, missing/invisible board-scoped ids must be `404`; `422 /problems/board-structure-violation` is reserved for structural-rule rejections.
+3. **Initiative can still be moved via generic update, bypassing explicit `:move` intent/state machine:** `UpdateInitiativeAsync` directly mutates `initiative.ColumnId` (`BoardEndpointMap.cs`, lines 420-423). This violates TD-F’s explicit intent endpoint rule and can bypass FR-11/FR-16 transition logic that must run through the move path.
+
+### Non-blocking suggestions
+
+- Tighten `dotnet test` output hygiene by resolving the existing obsolete Testcontainers constructor warning in `tests/api/ProjectTracker.Api.Tests/TestInfrastructure/PostgresFixture.cs`.
+
+### Files of concern
+
+- `src/api/Modules/Board/Endpoints/BoardEndpointMap.cs`
+- `src/api/Modules/Board/Endpoints/BoardProblemDetailsExceptionHandler.cs`
+
+### Next step
+
+return to implementer
+
 ## 7. Release Notes
 
 _Pending — run `/release`._
