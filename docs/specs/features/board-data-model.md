@@ -533,6 +533,31 @@ FAIL — third-round review confirms the claimed round-2 fixes landed, but the e
 
 return to implementer
 
+
+<!-- gate:review verdict=FAIL reviewer=code-reviewer at=2026-10-12T05:16:08Z -->
+
+### Verdict
+
+FAIL — fourth-round independent review found the requested round-3 fixes landed, but a blocking task-move contract violation remains in endpoint logic.
+
+### Blocking issues
+
+1. **`POST /api/boards/{boardId}/tasks/{taskId}:move` mutates the source initiative and bulk-moves unrelated tasks, violating TD-F endpoint intent and FR-09/FR-11 boundaries.** In `MoveTaskAsync`, cross-initiative/cross-column moves call `InitiativeMoveService.Move(...)` with *all tasks in the source initiative* and then apply `ApplyInitiativeMove(...)` to the source initiative entity (`src/api/Modules/Board/Endpoints/BoardEndpointMap.cs`, lines 640–647). This means a single task move can change `initiative.ColumnId` and rewrite other tasks’ `initiativeId/taskSubStageId`, which is not the task-move contract.
+
+### Non-blocking suggestions
+
+- Remove `UnauthorizedHttpResult` branches/signatures in board-scoped handlers that are currently unreachable under `BoardAuthorizationFilter`, to reduce status-code ambiguity and keep TD-F mapping explicit.
+- Address the existing Testcontainers obsolete-constructor warning in the test fixture for cleaner CI output.
+
+### Files of concern
+
+- `src/api/Modules/Board/Endpoints/BoardEndpointMap.cs`
+- `src/api/Modules/Board/Services/InitiativeMoveService.cs`
+
+### Next step
+
+return to implementer
+
 ## 7. Release Notes
 
 _Pending — run `/release`._
