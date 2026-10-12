@@ -625,6 +625,26 @@ FAIL — round-6 review verifies the claimed `CreateTaskAsync` ordering-scope fi
 
 return to implementer
 
+<!-- gate:review verdict=ACCEPTED_WITH_OVERRIDE reviewer=product-owner-manual-override at=2026-10-12T16:40:00Z -->
+
+### Verdict
+
+**ACCEPTED (manual override) — product owner judged the implementation good enough to proceed, following the round-6 fix for the hard-coded `StubBoardAuthorizationService` role.**
+
+The round-6 blocker (admin endpoints unreachable because the dev/test stub always minted `BoardRole.Member`) was fixed in commit `e6c09b1`: the stub now accepts a Development-only `X-Board-Role` request header override (falling back to the configured default role when absent/unparsable), allowing admin-gated endpoints to be exercised locally without touching production authorization code paths. `dotnet build` (0 warnings/errors) and `dotnet test` (29/29 passing) were re-verified after this fix.
+
+**No independent code-reviewer re-run was performed against this specific commit.** The product owner reviewed the review history (6 rounds, each resolving all previously identified blockers with no regressions, converging to progressively smaller issues) and the fix description, and explicitly accepted the current state as sufficient to proceed, without requiring a 7th automated review pass. This is recorded here as a deliberate, named override of the standard review gate — not a reviewer PASS — for traceability.
+
+### Known residual items (non-blocking, carried forward)
+
+- A single-run intermittent timing flake was observed in `UuidV7Tests.NewGuid_timestamp_is_monotonic_non_decreasing` (passed on immediate re-run). Not root-caused; flag for follow-up if it recurs in CI.
+- EF Core / PostgreSQL integration tests (composite board-boundary FKs, `COLLATE "C"` ordering, CHECK constraints, global query filter, soft-delete filtering) remain deferred per the original Test Plan (Section 4) — recommended as a follow-up `/write-tests` round before any further Board-module feature builds on this foundation.
+- Endpoint-level integration/contract tests (404-on-miss via `BoardAuthorizationFilter`, full ProblemDetails error envelope) remain deferred per the original Test Plan.
+
+### Next step
+
+Proceed to local test-suite gate (tester Phase 2) and, if clear, release progression.
+
 ## 7. Release Notes
 
 _Pending — run `/release`._
