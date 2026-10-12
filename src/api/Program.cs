@@ -1,11 +1,21 @@
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using ProjectTracker.Api.Modules.Board;
 using ProjectTracker.Api.Modules.Board.Access;
+using ProjectTracker.Api.Modules.Board.Endpoints;
+using ProjectTracker.Api.Modules.Board.Ordering;
 using ProjectTracker.Api.Modules.Board.Persistence;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<BoardProblemDetailsExceptionHandler>();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 builder.Services.AddCors(options =>
 {
@@ -26,7 +36,9 @@ builder.Services.AddScoped<IBoardAuthorizationService>(sp =>
         environmentName: environment.EnvironmentName,
         allowStubAuthorization: allowStub);
 });
+builder.Services.AddScoped<BoardAuthorizationFilter>();
 builder.Services.AddScoped<SaveChangesInterceptor, RowVersionInterceptor>();
+builder.Services.AddSingleton<OrderingService>();
 
 builder.Services.AddDbContext<BoardDbContext>((sp, options) =>
 {
@@ -56,6 +68,7 @@ app.UseExceptionHandler();
 app.MapGet("/", () => Results.Ok(new { service = "ProjectTracker API", status = "running" }));
 app.MapGet("/healthz/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/healthz/ready", () => Results.Ok(new { status = "ok" }));
+app.MapBoardEndpoints();
 
 app.Run();
 

@@ -54,7 +54,8 @@ public class InitiativeMoveServiceTests
             initiative,
             tasks: [task],
             destinationColumn: columnB,
-            destinationSubStagesOrderedBySortOrder: [destS1, destS2]);
+            destinationSubStagesOrderedBySortOrder: [destS1, destS2],
+            resolveTaskSubStage: id => id == inactiveSubStage.Id ? inactiveSubStage : null);
 
         var movedTask = result.Tasks.Single();
         Assert.Equal(inactiveSubStage.Id, movedTask.TaskSubStageId);

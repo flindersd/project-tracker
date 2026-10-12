@@ -8,12 +8,15 @@ public static class InitiativeMoveService
         Initiative initiative,
         IReadOnlyList<TaskItem> tasks,
         BoardColumn destinationColumn,
-        IReadOnlyList<TaskSubStage> destinationSubStagesOrderedBySortOrder)
+        IReadOnlyList<TaskSubStage> destinationSubStagesOrderedBySortOrder,
+        Func<Guid?, TaskSubStage?>? resolveTaskSubStage = null)
     {
         if (destinationColumn.Type == ColumnType.InitiativeTask && destinationSubStagesOrderedBySortOrder.Count == 0)
         {
             throw new BoardStructuralViolationException();
         }
+
+        resolveTaskSubStage ??= _ => null;
 
         var movedInitiative = CloneInitiative(initiative);
         movedInitiative.ColumnId = destinationColumn.Id;
@@ -38,7 +41,7 @@ public static class InitiativeMoveService
         {
             task.InitiativeId = movedInitiative.Id;
 
-            var sourceTaskSubStage = ResolveTaskSubStage(task.TaskSubStageId);
+            var sourceTaskSubStage = resolveTaskSubStage(task.TaskSubStageId);
             var isInactiveCarryOver = sourceTaskSubStage?.IsInactive == true;
 
             if (isInactiveCarryOver)
@@ -50,13 +53,6 @@ public static class InitiativeMoveService
         }
 
         return new InitiativeMoveResult(movedInitiative, movedTasks);
-    }
-
-    private static TaskSubStage? ResolveTaskSubStage(Guid? taskSubStageId)
-    {
-        return taskSubStageId is Guid id && TaskSubStage.TryGetRegistered(id, out var subStage)
-            ? subStage
-            : null;
     }
 
     private static Initiative CloneInitiative(Initiative source) => new()

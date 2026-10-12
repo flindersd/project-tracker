@@ -10,7 +10,11 @@ public sealed class TaskAssigneeConfiguration : IEntityTypeConfiguration<TaskAss
     {
         builder.ToTable("task_assignees");
 
-        builder.HasKey(x => new { x.TaskId, x.UserId });
+        builder.HasKey(x => new { x.BoardId, x.TaskId, x.UserId });
+
+        builder.Property(x => x.BoardId)
+            .HasColumnName("board_id")
+            .IsRequired();
 
         builder.Property(x => x.TaskId)
             .HasColumnName("task_id")
@@ -31,9 +35,13 @@ public sealed class TaskAssigneeConfiguration : IEntityTypeConfiguration<TaskAss
         builder.HasIndex(x => x.UserId)
             .HasDatabaseName("ix_task_assignees_user_id");
 
+        builder.HasIndex(x => new { x.BoardId, x.TaskId, x.UserId })
+            .IsUnique();
+
         builder.HasOne<TaskItem>()
             .WithMany()
-            .HasForeignKey(x => x.TaskId)
+            .HasForeignKey(x => new { x.BoardId, x.TaskId })
+            .HasPrincipalKey(x => new { x.BoardId, x.Id })
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

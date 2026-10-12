@@ -164,6 +164,7 @@ public partial class InitialCreate : Migration
             name: "task_assignees",
             columns: table => new
             {
+                board_id = table.Column<Guid>(type: "uuid", nullable: false),
                 task_id = table.Column<Guid>(type: "uuid", nullable: false),
                 user_id = table.Column<Guid>(type: "uuid", nullable: false),
                 assigned_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
@@ -171,12 +172,12 @@ public partial class InitialCreate : Migration
             },
             constraints: table =>
             {
-                table.PrimaryKey("PK_task_assignees", x => new { x.task_id, x.user_id });
+                table.PrimaryKey("PK_task_assignees", x => new { x.board_id, x.task_id, x.user_id });
                 table.ForeignKey(
-                    name: "FK_task_assignees_tasks_task_id",
-                    column: x => x.task_id,
+                    name: "FK_task_assignees_tasks_board_id_task_id",
+                    columns: x => new { x.board_id, x.task_id },
                     principalTable: "tasks",
-                    principalColumn: "id",
+                    principalColumns: new[] { "board_id", "id" },
                     onDelete: ReferentialAction.Cascade);
             });
 
@@ -184,23 +185,24 @@ public partial class InitialCreate : Migration
             name: "task_tags",
             columns: table => new
             {
+                board_id = table.Column<Guid>(type: "uuid", nullable: false),
                 task_id = table.Column<Guid>(type: "uuid", nullable: false),
                 tag_id = table.Column<Guid>(type: "uuid", nullable: false),
             },
             constraints: table =>
             {
-                table.PrimaryKey("PK_task_tags", x => new { x.task_id, x.tag_id });
+                table.PrimaryKey("PK_task_tags", x => new { x.board_id, x.task_id, x.tag_id });
                 table.ForeignKey(
-                    name: "FK_task_tags_tags_tag_id",
-                    column: x => x.tag_id,
+                    name: "FK_task_tags_tags_board_id_tag_id",
+                    columns: x => new { x.board_id, x.tag_id },
                     principalTable: "tags",
-                    principalColumn: "id",
+                    principalColumns: new[] { "board_id", "id" },
                     onDelete: ReferentialAction.Cascade);
                 table.ForeignKey(
-                    name: "FK_task_tags_tasks_task_id",
-                    column: x => x.task_id,
+                    name: "FK_task_tags_tasks_board_id_task_id",
+                    columns: x => new { x.board_id, x.task_id },
                     principalTable: "tasks",
-                    principalColumn: "id",
+                    principalColumns: new[] { "board_id", "id" },
                     onDelete: ReferentialAction.Cascade);
             });
 
@@ -246,6 +248,12 @@ public partial class InitialCreate : Migration
             column: "user_id");
 
         migrationBuilder.CreateIndex(
+            name: "IX_task_assignees_board_id_task_id_user_id",
+            table: "task_assignees",
+            columns: new[] { "board_id", "task_id", "user_id" },
+            unique: true);
+
+        migrationBuilder.CreateIndex(
             name: "IX_task_sub_stages_board_id_id",
             table: "task_sub_stages",
             columns: new[] { "board_id", "id" },
@@ -274,9 +282,15 @@ public partial class InitialCreate : Migration
             columns: new[] { "board_id", "task_sub_stage_id" });
 
         migrationBuilder.CreateIndex(
-            name: "IX_task_tags_tag_id",
+            name: "IX_task_tags_board_id_task_id_tag_id",
             table: "task_tags",
-            column: "tag_id");
+            columns: new[] { "board_id", "task_id", "tag_id" },
+            unique: true);
+
+        migrationBuilder.CreateIndex(
+            name: "IX_task_tags_board_id_tag_id",
+            table: "task_tags",
+            columns: new[] { "board_id", "tag_id" });
 
         migrationBuilder.Sql(@"
 CREATE UNIQUE INDEX ""IX_tasks_board_id_initiative_id_task_sub_stage_id"" 

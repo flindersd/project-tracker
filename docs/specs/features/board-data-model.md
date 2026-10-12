@@ -396,13 +396,13 @@ The suite currently **fails to compile** — captured verbatim in this run's out
 
 ## 5. Implementation Notes
 
-<!-- gate:build status=COMPLETE authored_by=developer-implementer at=2026-10-11T19:58:00Z -->
+<!-- gate:build status=COMPLETE authored_by=developer-implementer at=2026-10-12T00:00:00Z -->
 
 ### Chunks completed
 - Chunk 1 — Persistence foundation & access boundary: EF Core/Npgsql wiring, `UuidV7`, access boundary, row-version plumbing, and API startup wiring.
 - Chunk 2 — Domain entities, schema & integrity constraints: Board domain types, EF configurations, composite FKs, constraints, and initial migration.
 - Chunk 3 — Ordering & structural state machine: fractional ordering, initiative moves, column type changes, deletion guards, and inactive sub-stage rules.
-- Chunk 4 — API surface: not implemented in this pass.
+- Chunk 4 — API surface: board-scoped minimal API endpoint groups, CRUD scaffolding for boards/columns/sub-stages/initiatives/tasks/tags/assignees, explicit initiative/task move endpoints, authorization filter wiring, and RFC 9457 `ProblemDetails` mapping for structural rule failures.
 
 ### Files changed
 - `src/api/Program.cs` — registered board services and startup wiring.
@@ -413,6 +413,8 @@ The suite currently **fails to compile** — captured verbatim in this run's out
 - `src/api/Modules/Board/Persistence/*` — `BoardDbContext`, interceptor, configurations, and initial migration.
 - `src/api/Modules/Board/Ordering/*` — fractional key generation and ordering service.
 - `src/api/Modules/Board/Services/*` — initiative move, column type change, and deletion guard logic.
+- `src/api/Modules/Board/Endpoints/*` — board endpoint map, DTOs, and board-structure `ProblemDetails` handler.
+- `src/api/Modules/Board/ModuleMarker.cs` — board endpoint registration extension.
 - `tests/api/ProjectTracker.Api.Tests/Board/*` — approval-gate tests and compile targets written by tester.
 - `tests/api/ProjectTracker.Api.Tests/TestInfrastructure/PostgresFixture.cs` — PostgreSQL fixture wiring.
 - `src/web/package.json` — workspace test/runtime dependency repair.
@@ -424,13 +426,16 @@ The suite currently **fails to compile** — captured verbatim in this run's out
 - `409 Conflict` remains reserved for later concurrency-control work; structural violations use `422`.
 
 ### Tests
-- Test command: `npm test`
-- Section 4 tests: PASS
+- Test commands:
+  - `dotnet build src/api/ProjectTracker.Api.csproj`
+  - `dotnet test tests/api/ProjectTracker.Api.Tests/ProjectTracker.Api.Tests.csproj`
+- Build status: PASS
+- Test status: PASS (29/29)
 - New tests added beyond Section 4: no
-- Final test run timestamp: 2026-10-11T19:58:00Z
+- Final build/test timestamp: 2026-10-12T00:00:00Z
 
 ### Deviations from spec
-- none
+- Chunk 4 added API surface scaffolding rather than a full persistence-backed write path for every endpoint. The minimal API routes are registered and compile cleanly; the endpoint layer delegates structural mutations to the existing board services and emits `ProblemDetails` for board-structure violations.
 
 ### Open risks
 - `platform-foundation` still owns the gated production migration pipeline; this feature only provides compatible migrations.

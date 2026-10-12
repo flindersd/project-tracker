@@ -35,5 +35,7 @@ public sealed class BoardDbContext : DbContext
         modelBuilder.Entity<TaskItem>().HasQueryFilter(e => e.DeletedAt == null && e.BoardId == boardScopeAccessor.CurrentBoardId);
         modelBuilder.Entity<Tag>().HasQueryFilter(e => e.DeletedAt == null && e.BoardId == boardScopeAccessor.CurrentBoardId);
         modelBuilder.Entity<TaskSubStage>().HasQueryFilter(e => e.BoardId == boardScopeAccessor.CurrentBoardId);
+        modelBuilder.Entity<TaskAssignee>().HasQueryFilter(e => e.BoardId == boardScopeAccessor.CurrentBoardId);
+        modelBuilder.Entity<TaskTag>().HasQueryFilter(e => e.BoardId == boardScopeAccessor.CurrentBoardId);
     }
 }
