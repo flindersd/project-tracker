@@ -268,14 +268,14 @@ public static class BoardEndpointMap
         return TypedResults.Ok<IEnumerable<TaskSubStageResponse>>(subStages);
     }
 
-    private static async Task<Results<Created<TaskSubStageResponse>, UnauthorizedHttpResult>> CreateSubStageAsync(Guid boardId, Guid columnId, CreateTaskSubStageRequest request, HttpContext httpContext, BoardDbContext db, OrderingService orderingService, CancellationToken cancellationToken)
+    private static async Task<Results<Created<TaskSubStageResponse>, NotFound, UnauthorizedHttpResult>> CreateSubStageAsync(Guid boardId, Guid columnId, CreateTaskSubStageRequest request, HttpContext httpContext, BoardDbContext db, OrderingService orderingService, CancellationToken cancellationToken)
     {
         RequireAdministrator(httpContext);
 
         var column = await db.BoardColumns.FirstOrDefaultAsync(x => x.BoardId == boardId && x.Id == columnId, cancellationToken);
         if (column is null)
         {
-            return TypedResults.Unauthorized();
+            return TypedResults.NotFound();
         }
 
         var sortOrder = await ComputeSortOrderAsync(
@@ -416,11 +416,6 @@ public static class BoardEndpointMap
 
         initiative.Title = request.Title;
         initiative.Description = request.Description;
-
-        if (initiative.ColumnId != request.ColumnId)
-        {
-            initiative.ColumnId = request.ColumnId;
-        }
 
         initiative.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
@@ -609,19 +604,34 @@ public static class BoardEndpointMap
         var destinationInitiative = initiative;
         if (request.InitiativeId is not null && request.InitiativeId != task.InitiativeId)
         {
-            destinationInitiative = await db.Initiatives.AsNoTracking().FirstOrDefaultAsync(x => x.BoardId == boardId && x.Id == request.InitiativeId.Value, cancellationToken)
-                ?? throw new BoardStructuralViolationException();
+            destinationInitiative = await db.Initiatives.AsNoTracking().FirstOrDefaultAsync(x => x.BoardId == boardId && x.Id == request.InitiativeId.Value, cancellationToken);
+            if (destinationInitiative is null)
+            {
+                return TypedResults.NotFound();
+            }
         }
 
         var destinationColumn = destinationInitiative.ColumnId == initiative.ColumnId
             ? sourceColumn
-            : await db.BoardColumns.AsNoTracking().FirstAsync(x => x.BoardId == boardId && x.Id == destinationInitiative.ColumnId, cancellationToken);
+            : await db.BoardColumns.AsNoTracking().FirstOrDefaultAsync(x => x.BoardId == boardId && x.Id == destinationInitiative.ColumnId, cancellationToken);
+        if (destinationColumn is null)
+        {
+            return TypedResults.NotFound();
+        }
 
         TaskSubStage? destinationSubStage = null;
         if (request.TaskSubStageId is not null)
         {
-            destinationSubStage = await db.TaskSubStages.AsNoTracking().FirstOrDefaultAsync(x => x.BoardId == boardId && x.Id == request.TaskSubStageId.Value, cancellationToken)
-                ?? throw new BoardStructuralViolationException();
+            destinationSubStage = await db.TaskSubStages.AsNoTracking().FirstOrDefaultAsync(x => x.BoardId == boardId && x.Id == request.TaskSubStageId.Value, cancellationToken);
+            if (destinationSubStage is null)
+            {
+                return TypedResults.NotFound();
+            }
+
+            if (destinationSubStage.ParentColumnId != destinationColumn.Id)
+            {
+                throw new BoardStructuralViolationException();
+            }
         }
 
         var destinationSubStages = await db.TaskSubStages.AsNoTracking().Where(x => x.BoardId == boardId && x.ParentColumnId == destinationColumn.Id).ToListAsync(cancellationToken);

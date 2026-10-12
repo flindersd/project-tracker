@@ -16,7 +16,7 @@ public sealed record UpdateTaskSubStageRequest(string Name, bool IsInactive);
 
 public sealed record InitiativeResponse(Guid Id, Guid BoardId, Guid ColumnId, string Title, string? Description, string SortOrder);
 public sealed record CreateInitiativeRequest(Guid ColumnId, string Title, string? Description, Guid? AfterId, Guid? BeforeId);
-public sealed record UpdateInitiativeRequest(Guid ColumnId, string Title, string? Description);
+public sealed record UpdateInitiativeRequest(string Title, string? Description);
 public sealed record MoveInitiativeRequest(Guid ColumnId, Guid? AfterId, Guid? BeforeId);
 
 public sealed record TaskResponse(Guid Id, Guid BoardId, Guid InitiativeId, Guid? TaskSubStageId, Guid? DormantSubStageId, string Title, string? Description, DateOnly? DueDate, TaskPriority Priority, string SortOrder, long RowVersion);

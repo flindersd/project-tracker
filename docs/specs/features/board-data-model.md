@@ -412,6 +412,12 @@ The suite currently **fails to compile** — captured verbatim in this run's out
 - Changed `BoardProblemDetailsExceptionHandler` so `BoardStructuralViolationException` maps to `422 /problems/board-structure-violation`, while `BoardForbiddenException` maps to `403 /problems/forbidden`.
 - Added `<UseAppHost>false</UseAppHost>` to `src/api/ProjectTracker.Api.csproj` so local build/test execution is stable on this environment.
 
+### Round 3 fixes
+- Changed `CreateSubStageAsync` to return `404 Not Found` when the target column is missing or outside the board scope, instead of misclassifying the miss as unauthorized; audited other board-scoped parent lookups in this endpoint map to keep missing in-scope ids on the 404 path.
+- Changed `MoveTaskAsync` so a missing destination initiative id or task sub-stage id now returns `404 Not Found` directly, while genuine structural violations still raise `BoardStructuralViolationException` and map to `422`.
+- Removed `ColumnId` from `UpdateInitiativeRequest` and deleted the `UpdateInitiativeAsync` mutation path that assigned `initiative.ColumnId` directly, so initiative moves now flow only through the explicit `:move` endpoint and `InitiativeMoveService`.
+- Verified the API builds cleanly and the full API test suite still passes after the change set.
+
 ### Files changed
 - `src/api/Program.cs` — registered board services and startup wiring.
 - `src/api/ProjectTracker.Api.csproj` — added EF Core / Npgsql packages and disabled apphost generation for local CLI stability.
@@ -437,7 +443,7 @@ The suite currently **fails to compile** — captured verbatim in this run's out
 - Test commands:
   - `dotnet build src/api/ProjectTracker.Api.csproj`
   - `dotnet test tests/api/ProjectTracker.Api.Tests/ProjectTracker.Api.Tests.csproj`
-- Build status: PASS
+- Build status: PASS (0 warnings, 0 errors)
 - Test status: PASS (29/29) with 1 warning from the existing Testcontainers PostgreSQL fixture (`PostgreSqlBuilder` obsolete constructor)
 - New tests added beyond Section 4: no
 - Final build/test timestamp: 2026-10-12T00:00:00Z
