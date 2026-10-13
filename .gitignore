@@ -14,3 +14,6 @@ coverage/
 .env.*.local
 
 test-reports/
+
+# OpenCode workflow — local pointer (per-developer session state, do not commit)
+.opencode/active-feature
