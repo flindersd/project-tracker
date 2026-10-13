@@ -363,7 +363,88 @@ Each chunk leaves the codebase compilable and committable. Chunk 5's drill is a 
 
 ## 4. Test Plan
 
-_Pending — run `/write-tests`._
+<!-- gate:tests status=WRITTEN_AND_FAILING authored_by=tester at=2026-10-13T03:39:23Z -->
+
+### Clarification Checklist
+
+No clarifications were raised with the BA/Tech Lead before writing tests — Section 3 (D-1 through D-10) resolves all Section 1 open questions and is specific enough about expected behaviour (exact header names, status codes, file paths, log levels) to write deterministic tests directly against it.
+
+### Test Plan Summary
+
+| Layer | Framework | # Tests | Areas covered |
+|---|---|---|---|
+| Integration — C# backend (`WebApplicationFactory` + Testcontainers) | xUnit | 7 | D-3 readiness health checks (DB unreachable, pending migrations, healthy structured response); D-4.1 CORS allow-list (credentialed allowed origin, rejected disallowed origin); D-4.2 fail-fast connection-string resolution in Production; D-4.3 `DATABASE_URL` libpq-URI translation against a real Postgres container |
+| Unit/config — C# backend (file-content assertions) | xUnit | 4 (2 theory cases + 2) | D-5 EF Core command log level pinned to `Warning` in every `appsettings*.json`; D-6 `railway.toml` `startCommand` full-path correctness and `healthcheckPath` pointing at `/healthz/ready` |
+
+**Total new tests: 11**, all currently failing against the unmodified codebase (confirmed by running `dotnet test` — see below).
+
+Pre-existing `board-data-model` test suite (29 tests) is unaffected and still green.
+
+### Test files added
+
+- `tests/api/ProjectTracker.Api.Tests/Platform/gherkin-scenarios.md` — plain-English Given/When/Then source for every test below
+- `tests/api/ProjectTracker.Api.Tests/TestInfrastructure/PlatformWebApplicationFactory.cs` — test-only `WebApplicationFactory<Program>` supporting per-test configuration/environment overrides
+- `tests/api/ProjectTracker.Api.Tests/Platform/HealthEndpointTests.cs`
+- `tests/api/ProjectTracker.Api.Tests/Platform/CorsPolicyTests.cs`
+- `tests/api/ProjectTracker.Api.Tests/Platform/ConnectionStringFailFastTests.cs`
+- `tests/api/ProjectTracker.Api.Tests/Platform/DatabaseUrlTranslationTests.cs`
+- `tests/api/ProjectTracker.Api.Tests/Platform/LoggingConfigurationTests.cs`
+- `tests/api/ProjectTracker.Api.Tests/Platform/RailwayConfigurationTests.cs`
+- `tests/api/ProjectTracker.Api.Tests/ProjectTracker.Api.Tests.csproj` — added `Microsoft.AspNetCore.Mvc.Testing` package reference (test infra only, no production dependency added)
+
+### Acceptance criteria → test case mapping
+
+| Section 1 AC / Section 3 decision | Test case(s) |
+|---|---|
+| "Deployments expose `/healthz/live`... and `/healthz/ready`... a failed readiness check prevents promotion" (AC); D-3 | `HealthEndpointTests.Ready_returns_503_when_database_is_unreachable`, `Ready_returns_503_when_migrations_are_pending`, `Ready_returns_200_with_structured_checks_when_database_is_healthy` |
+| "The API obtains database configuration only from server-side environment variables/secrets" (AC); D-4.2 | `ConnectionStringFailFastTests.Startup_fails_in_production_when_no_connection_string_is_configured` |
+| D-4.3 (`DATABASE_URL` libpq URI translation — "a known, guaranteed failure" per Risks table) | `DatabaseUrlTranslationTests.A_libpq_style_DATABASE_URL_is_usable_for_real_requests` |
+| D-4.1 (CORS allow-list, replacing `AllowAnyOrigin()`) | `CorsPolicyTests.Allows_credentialed_requests_from_a_configured_allowed_origin`, `Does_not_allow_a_disallowed_origin` |
+| D-5 ("Request bodies are never logged"; `Microsoft.EntityFrameworkCore.Database.Command` pinned to `Warning`) | `LoggingConfigurationTests.EfCoreCommandLogging_is_never_configured_more_verbose_than_warning` (theory over both `appsettings.json` and `appsettings.Development.json`) |
+| D-6 (`railway.toml` `startCommand` must resolve against Nixpacks publish output; `healthcheckPath` must use the real readiness check) | `RailwayConfigurationTests.StartCommand_references_a_fully_qualified_dll_path`, `HealthcheckPath_points_at_the_real_readiness_endpoint` |
+
+### Test command(s)
+
+```bash
+# Full repo suite (as used by CI / npm run test)
+npm run test
+
+# This feature's backend tests only
+dotnet test tests/api/ProjectTracker.Api.Tests/ProjectTracker.Api.Tests.csproj --filter "FullyQualifiedName~Platform"
+```
+
+Requires Docker running locally (Testcontainers spins up ephemeral `postgres:16-alpine` containers for the integration tests). CI already has Docker available on `ubuntu-latest` runners.
+
+**Pre-existing repo issue found, not introduced by this test suite:** `src/api/ProjectTracker.Api.sln`'s `Global`/`GlobalSection` lines contain literal backslash-`t`/backslash-`n` escape sequences instead of real tab/newline characters, which breaks `dotnet restore/build/test` when invoked directly against the `.sln` file (MSBuild logs "Unable to find a project to restore!" and silently builds nothing). Tests were verified by building/running against the `.csproj` files directly, which parse correctly. The build agent should either fix the `.sln` line endings or continue invoking `dotnet test` against the `.csproj` paths / `npm run test` (which calls `dotnet test src/api/ProjectTracker.Api.sln` — **this will need the `.sln` fixed before the build agent can rely on the root `npm run test` script**).
+
+### Confirmation tests currently fail (TDD gate)
+
+Ran `dotnet test tests/api/ProjectTracker.Api.Tests/ProjectTracker.Api.Tests.csproj --filter "FullyQualifiedName~Platform"` against the unmodified codebase:
+
+```
+Total tests: 11
+     Failed: 11
+```
+
+All 11 fail for the expected reason (missing/stubbed implementation — e.g. `/healthz/ready` still returns the hardcoded `{ status = "ok" }`, CORS still uses `AllowAnyOrigin()`, `railway.toml` still has the broken `startCommand`), not for compilation or environment errors. The pre-existing 29 `board-data-model` tests remain green and unaffected.
+
+### Assumptions made
+
+- **D-3 structured readiness body:** the spec doesn't dictate exact JSON shape for `/healthz/ready`. Assumed a `checks` array (consistent with `Microsoft.Extensions.Diagnostics.HealthChecks`' standard `UIResponseWriter`-style output) and a body that textually names "postgres"/"database" on failure. The build agent may shape the JSON differently as long as it is a genuine per-check breakdown, not a bare constant, and the 503 body names the failing check.
+- **CORS header assertions:** assumed the conventional ASP.NET Core CORS middleware header names (`Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials`) are used, since D-4.1 specifies `AllowCredentials()` via the standard `AddCors` API.
+- **Fail-fast test isolates the connection-string path** from an unrelated existing guard (`StubBoardAuthorizationService` already throws in non-Development without explicit opt-in) by explicitly setting `Board:AllowStubAuthorization=true`, so the test fails/passes only on the connection-string behaviour it targets.
+- **D-4.3 test uses the already-public `GET /api/boards` endpoint** as the DB-access probe, rather than a new dedicated endpoint, since no new public endpoint is specified for this feature.
+
+### Not covered and why
+
+- **Chunk 1 (Railway project/environment/service provisioning)** — manual console work with no code surface; the spec itself calls this "a guided checklist," not a build task. Verified by the operator, not a test.
+- **CI/CD workflow behaviour** (fast/full gate timing, `concurrency: cancel-in-progress`, required-reviewer production environment protection, dependency caching) — these are GitHub Actions/environment settings; no meaningful unit test exists for them. Verified by an actual workflow run.
+- **Sentry wiring, uptime monitoring, DB pool-saturation alerting, monthly Railway spend/Actions-minutes review (D-7, D-9 cost controls)** — operational configuration with no deterministic local test; verified manually per the runbook.
+- **The restore drill and measured RTO (D-8)** — must be an executed, recorded drill against real staging infrastructure, not a test suite assertion.
+- **Migration bundle CI job ordering (D-2)** — a deploy-pipeline behaviour that requires a live CI run against a real environment; not isolable as a unit/integration test without reimplementing the GitHub Actions runner.
+- **Structured-log content assertions beyond the EF command log level** (e.g. "request bodies are never logged," correlation ID from `traceparent`) — no Serilog sink exists yet to intercept; writing a black-box test today would require guessing at a yet-unbuilt enricher's output shape in a way that risks dictating implementation rather than verifying behaviour. Recommend the build agent add this coverage as part of Chunk 2 once the Serilog enricher exists, or flag back to `/tl` if a testable seam (e.g. an injectable `ILoggerProvider`) should be specified.
+
+
 
 ## 5. Implementation Notes
 
