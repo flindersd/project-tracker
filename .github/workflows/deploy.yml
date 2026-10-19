@@ -1,0 +1,102 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrate-staging:
+    name: Migrate staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore .NET dependencies
+        run: dotnet restore src/api/ProjectTracker.Api.sln
+
+      - name: Run staged migrations
+        working-directory: src/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MigrationModuleOrder: BoardDbContext
+        run: ../../scripts/migrate.sh
+
+  deploy-staging:
+    name: Deploy staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - migrate-staging
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        working-directory: src/api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: npx -y @railway/cli@latest up --ci --service api --environment staging
+
+  migrate-production:
+    name: Migrate production
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore .NET dependencies
+        run: dotnet restore src/api/ProjectTracker.Api.sln
+
+      - name: Run production migrations
+        working-directory: src/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MigrationModuleOrder: BoardDbContext
+        run: ../../scripts/migrate.sh
+
+  deploy-production:
+    name: Deploy production
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - migrate-production
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        working-directory: src/api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: npx -y @railway/cli@latest up --ci --service api --environment production
