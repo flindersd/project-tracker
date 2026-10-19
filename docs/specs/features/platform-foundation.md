@@ -448,7 +448,62 @@ All 11 fail for the expected reason (missing/stubbed implementation — e.g. `/h
 
 ## 5. Implementation Notes
 
-_Pending — run `/build`._
+<!-- gate:build status=COMPLETE authored_by=developer-implementer at=2026-10-19T13:25:00Z -->
+
+### Chunks completed
+
+- Chunk 1 — Railway environments & configuration: fixed `src/api/railway.toml` (`startCommand` full DLL path, `healthcheckPath = /healthz/ready`), updated `.env.example`, wrote `docs/specs/operations/environments.md` as a verified manual-provisioning checklist.
+- Chunk 2 — Connectivity, health checks & logging: `DatabaseConnectionString` libpq-URI→Npgsql translation, fail-fast connection-string resolution in non-Development, CORS allow-list with credentials, real `/healthz/live` + `/healthz/ready` (`AddDbContextCheck`, structured 503 body naming the failing check), Serilog JSON to stdout with an EF command log level pinned to `Warning`.
+- Chunk 3 — Migration bundle pipeline: `BoardDbContextFactory` design-time factory for `dotnet ef migrations bundle`, `scripts/migrate.sh` as a fail-closed gated migrate entry point driven by `MigrationModuleOrder`, removed a Development-only auto-migrate block from `Program.cs` that had been masking a test gap and violating the "no `Database.Migrate()` at startup" AC.
+- Chunk 4 — CI/CD workflows: `.github/workflows/ci.yml` (two-tier fast/full gate, `concurrency.cancel-in-progress`, npm/NuGet caching via `actions/cache` + built-in setup-action caching, PR previews disabled by omission), `.github/workflows/deploy.yml` (migrate job as a `needs:` dependency before deploy, staging on `main`, production on `v*` tag referencing a `production` GitHub Environment), `.github/CODEOWNERS` placeholder ownership entry.
+- Chunk 5 — Monitoring, cost watch & restore drill: Sentry wired (`SendDefaultPii = false`, DSN from `Sentry_Dsn`, safe no-op when absent), `NpgsqlPoolMetrics` periodic pool-utilization logging hook, uptime-check and monthly Railway-spend/Actions-minutes review procedures documented in `docs/specs/operations/environments.md`, `docs/specs/operations/on-call.md` and `docs/specs/operations/runbook-restore.md` written (restore runbook procedure is complete; executed-drill evidence section is explicitly marked **NOT YET PERFORMED**).
+
+### Files changed
+
+- `src/api/railway.toml` — fixed `startCommand` and `healthcheckPath`
+- `src/api/.env.example` — documented platform environment variables
+- `docs/specs/operations/environments.md` — Railway topology, variables, manual provisioning checklist, uptime-check and cost-review procedures
+- `src/api/Program.cs` — CORS allow-list, fail-fast config, DB URI translation wiring, Serilog, health checks, Sentry wiring; removed Development-only auto-migrate block
+- `src/api/Shared/DatabaseConnectionString.cs` — libpq URI → Npgsql translation
+- `src/api/Shared/ConfigurationException.cs` — fail-fast configuration exception
+- `src/api/Shared/StructuredHealthCheckResult.cs` — structured readiness response shape
+- `src/api/Modules/Board/Persistence/Migrations/20261011193000_InitialCreate.cs` — migration metadata fix
+- `src/api/Modules/Board/Persistence/BoardDbContextFactory.cs` — design-time factory for EF bundle generation
+- `scripts/migrate.sh` — gated, fail-closed migrate-step entry point
+- `.github/workflows/ci.yml` — fast/full gate CI pipeline
+- `.github/workflows/deploy.yml` — migrate-then-deploy pipeline per environment
+- `.github/CODEOWNERS` — alert/escalation ownership mapping (placeholder)
+- `src/api/Infrastructure/Monitoring/NpgsqlPoolMetrics.cs` — periodic DB pool-utilization logging hook
+- `src/api/ProjectTracker.Api.csproj` — added Serilog.AspNetCore, Sentry.AspNetCore, Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore, Microsoft.AspNetCore.Mvc.Testing (test-only)
+- `docs/specs/operations/on-call.md` — named-owner record (placeholder, flagged open)
+- `docs/specs/operations/runbook-restore.md` — restore runbook; drill evidence section marked not yet performed
+- `tests/api/ProjectTracker.Api.Tests/Platform/DatabaseUrlTranslationTests.cs` — added a missing migration step in test setup (test fault fix, not production code; see Deviations)
+
+### Key decisions
+
+- Removing the Development-only auto-migrate block in Chunk 3 surfaced that `DatabaseUrlTranslationTests` had been passing only because of that side effect. Root-caused as a test fault (missing `MigrateAsync()` call in test setup, inconsistent with the sibling `HealthEndpointTests` pattern) rather than reverting the spec-mandated removal; the `tester` subagent fixed the test in isolation.
+- Npgsql "pool metrics" are implemented as a lightweight tracked-active-connection approximation plus periodic logging rather than deep pool introspection, since Npgsql does not expose first-class pool telemetry — this satisfies D-7's "logged periodically; alert on pool exhaustion" without inventing unsupported instrumentation.
+- CI fast gate filters out `Platform`-tagged Testcontainers-heavy tests via `dotnet test --filter` rather than inventing a new test-splitting mechanism, since no existing root script performs that split.
+
+### Tests
+
+- Test command: `npm run test` (full suite) and `dotnet test tests/api/ProjectTracker.Api.Tests/ProjectTracker.Api.Tests.csproj --filter "FullyQualifiedName~Platform"` (feature-scoped)
+- Section 4 tests: PASS (11/11 Platform tests; 40/40 full suite including pre-existing `board-data-model` tests)
+- New tests added beyond Section 4: yes — `DatabaseUrlTranslationTests.cs` was modified (not newly authored) to add a migration step; no new test files were added
+- Final test run timestamp: 2026-10-19T13:22:00Z (confirmed CLEAR TO PUSH by `tester-phase2`)
+
+### Deviations from spec
+
+- None in scope/behavior. One test-fix deviation: `DatabaseUrlTranslationTests.cs` required a one-line fix (apply migrations in test setup) after the Chunk 3 removal of a hidden auto-migrate side effect exposed that the test never isolated DB-URI-translation behavior on its own. This was executed by the `tester` subagent per the STUCK-report triage protocol, not by `developer-implementer`.
+
+### Open risks
+
+- **Restore drill execution (D-8 / FR-12) is NOT complete.** `docs/specs/operations/runbook-restore.md` contains the full procedure, but the actual staging restore drill with measured RTO has not been executed — this requires a human operator with live Railway console access and must be completed before M1 release.
+- **Named on-call owner (D-7 / Section 1 OQ-2) is a placeholder.** `docs/specs/operations/on-call.md` and `.github/CODEOWNERS` need product-owner confirmation of the real named individual before this is release-ready.
+- **External uptime monitor is documented but not provisioned** — no third-party uptime-check tool has actually been configured against `/healthz/ready` yet; this is a manual console/vendor-signup step outside this build agent's reach.
+- **Chunk 1's Railway console provisioning** (project/environments/services/backup schedule) is a manual checklist per the spec and has not been confirmed as executed by a human operator — see `docs/specs/operations/environments.md` §7 for the outstanding steps.
+- Railway CLI deploy commands in `deploy.yml` (`npx @railway/cli ... up --service api --environment staging`) are a reasonable placeholder and may need minor adjustment once real Railway project/service names are provisioned.
+- GitHub Environment protection rule (required reviewer) for the `production` environment must still be configured manually in the GitHub repository UI — the workflow only references `environment: production` so the setting has something to attach to.
 
 ## 6. Review Outcome
 
