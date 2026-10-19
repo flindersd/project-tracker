@@ -1,5 +1,8 @@
 using System.Net;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using ProjectTracker.Api.Modules.Board.Persistence;
 using ProjectTracker.Api.Tests.TestInfrastructure;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -33,6 +36,12 @@ public class DatabaseUrlTranslationTests
 
         await using var factory = new PlatformWebApplicationFactory()
             .WithConfiguration("DATABASE_URL", libpqUri);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BoardDbContext>();
+            await db.Database.MigrateAsync();
+        }
 
         using var client = factory.CreateClient();
 

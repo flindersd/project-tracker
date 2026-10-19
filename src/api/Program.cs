@@ -77,15 +77,6 @@ using (var scope = app.Services.CreateScope())
     _ = scope.ServiceProvider.GetRequiredService<BoardDbContext>();
 }
 
-if (builder.Environment.IsDevelopment()
-    && !string.IsNullOrWhiteSpace(builder.Configuration["DATABASE_URL"])
-    && string.IsNullOrWhiteSpace(builder.Configuration["ConnectionStrings:Postgres"]))
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<BoardDbContext>();
-    await db.Database.MigrateAsync();
-}
-
 app.UseCors();
 app.UseExceptionHandler();
 
