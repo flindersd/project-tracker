@@ -3,4 +3,5 @@ builder = "NIXPACKS"
 buildCommand = "dotnet publish src/api/ProjectTracker.Api.csproj -c Release"
 
 [deploy]
-startCommand = "dotnet ProjectTracker.Api.dll"
+startCommand = "dotnet publish/src/api/bin/Release/net8.0/ProjectTracker.Api.dll"
+healthcheckPath = "/healthz/ready"

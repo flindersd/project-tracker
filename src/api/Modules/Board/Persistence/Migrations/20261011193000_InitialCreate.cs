@@ -1,8 +1,12 @@
 using System;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using ProjectTracker.Api.Modules.Board.Persistence;
 
 namespace ProjectTracker.Api.Modules.Board.Persistence.Migrations;
 
+[DbContext(typeof(BoardDbContext))]
+[Migration("20261011193000_InitialCreate")]
 public partial class InitialCreate : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
@@ -39,6 +43,7 @@ public partial class InitialCreate : Migration
             constraints: table =>
             {
                 table.PrimaryKey("PK_board_columns", x => x.id);
+                table.UniqueConstraint("AK_board_columns_board_id_id", x => new { x.board_id, x.id });
                 table.ForeignKey(
                     name: "FK_board_columns_boards_board_id",
                     column: x => x.board_id,
@@ -61,6 +66,7 @@ public partial class InitialCreate : Migration
             constraints: table =>
             {
                 table.PrimaryKey("PK_tags", x => x.id);
+                table.UniqueConstraint("AK_tags_board_id_id", x => new { x.board_id, x.id });
                 table.ForeignKey(
                     name: "FK_tags_boards_board_id",
                     column: x => x.board_id,
@@ -83,6 +89,7 @@ public partial class InitialCreate : Migration
             constraints: table =>
             {
                 table.PrimaryKey("PK_task_sub_stages", x => x.id);
+                table.UniqueConstraint("AK_task_sub_stages_board_id_id", x => new { x.board_id, x.id });
                 table.ForeignKey(
                     name: "FK_task_sub_stages_board_columns_board_id_parent_column_id",
                     columns: x => new { x.board_id, x.parent_column_id },
@@ -108,6 +115,7 @@ public partial class InitialCreate : Migration
             constraints: table =>
             {
                 table.PrimaryKey("PK_initiatives", x => x.id);
+                table.UniqueConstraint("AK_initiatives_board_id_id", x => new { x.board_id, x.id });
                 table.ForeignKey(
                     name: "FK_initiatives_board_columns_board_id_column_id",
                     columns: x => new { x.board_id, x.column_id },
@@ -139,6 +147,7 @@ public partial class InitialCreate : Migration
             constraints: table =>
             {
                 table.PrimaryKey("PK_tasks", x => x.id);
+                table.UniqueConstraint("AK_tasks_board_id_id", x => new { x.board_id, x.id });
                 table.ForeignKey(
                     name: "FK_tasks_initiatives_board_id_initiative_id",
                     columns: x => new { x.board_id, x.initiative_id },
