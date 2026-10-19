@@ -403,7 +403,37 @@ If any of the above checks fail, **do not proceed**. Fix the configuration and r
 
 ---
 
-## 10. Rollback Procedure
+## 10. Monitoring and Cost Review Checklists
+
+### 10.1 External uptime monitor for `/healthz/ready`
+
+Because the uptime pinger is external tooling, set it up as a third-party monitor rather than application code.
+
+- [ ] Choose an uptime-monitoring provider approved by the team.
+- [ ] Configure an HTTP check against the staging API's `/healthz/ready` endpoint.
+- [ ] Configure a second HTTP check against the production API's `/healthz/ready` endpoint.
+- [ ] Set the expected success code to `200 OK`.
+- [ ] Alert on any non-200 response or timeout.
+- [ ] Route alerts to the named on-call owner in `docs/specs/operations/on-call.md`.
+- [ ] Verify the monitor follows redirects only if explicitly required by the provider.
+- [ ] Record the monitor URL, alert policy, and owner handoff in the release notes or ops tracker.
+
+### 10.2 Monthly Railway-spend and GitHub Actions-minutes review
+
+Review the approved cost envelope once per month and escalate at the 80% threshold.
+
+- [ ] Pull the current month-to-date Railway spend for staging and production.
+- [ ] Pull the current month-to-date GitHub Actions usage.
+- [ ] Compare spend to the approved monthly envelope.
+- [ ] Compare Actions usage to the HLD TD-13 threshold of approximately **1,600 minutes for two consecutive months**.
+- [ ] If either metric reaches 80% of the approved envelope, raise a review item to the release owner and product owner.
+- [ ] If Actions usage hits ~1,600 minutes for two consecutive months, apply the TD-13 escalation response from the HLD.
+- [ ] Record the review date, measured usage, decision, and any follow-up actions.
+- [ ] Keep the review artifact with the platform operations docs so the next month can be compared against it.
+
+---
+
+## 11. Rollback Procedure
 
 If a deploy breaks the API (e.g. a migration fails and the new API cannot start), the rollback steps are:
 

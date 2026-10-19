@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
+using ProjectTracker.Api.Infrastructure.Monitoring;
 using ProjectTracker.Api.Modules.Board;
 using ProjectTracker.Api.Modules.Board.Access;
 using ProjectTracker.Api.Modules.Board.Endpoints;
@@ -53,7 +55,21 @@ builder.Services.AddScoped<IBoardAuthorizationService>(sp =>
 });
 builder.Services.AddScoped<BoardAuthorizationFilter>();
 builder.Services.AddScoped<SaveChangesInterceptor, RowVersionInterceptor>();
+builder.Services.AddSingleton<NpgsqlPoolMetricsTracker>();
+builder.Services.AddSingleton<NpgsqlPoolMetricsInterceptor>();
+builder.Services.AddHostedService<NpgsqlPoolMetricsBackgroundService>();
 builder.Services.AddSingleton<OrderingService>();
+
+var sentryDsn = builder.Configuration["Sentry_Dsn"];
+if (!string.IsNullOrWhiteSpace(sentryDsn))
+{
+    builder.WebHost.UseSentry(options =>
+    {
+        options.Dsn = sentryDsn;
+        options.SendDefaultPii = false;
+        options.TracesSampleRate = 0.1;
+    });
+}
 
 builder.Services.AddDbContext<BoardDbContext>((sp, options) =>
 {
@@ -66,6 +82,7 @@ builder.Services.AddDbContext<BoardDbContext>((sp, options) =>
         npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory_Board");
     });
 
+    options.AddInterceptors(sp.GetRequiredService<NpgsqlPoolMetricsInterceptor>());
     options.AddInterceptors(sp.GetRequiredService<SaveChangesInterceptor>());
 });
 
