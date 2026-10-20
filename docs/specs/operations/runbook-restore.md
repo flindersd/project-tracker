@@ -8,11 +8,9 @@ This is the operational procedure required by Section 3 D-8. It must be executed
 
 ## 2. Ownership
 
-- **Primary owner:** TBD — product owner to confirm
+- **Primary owner:** Flinders Doyle (flinders.doyle@gmail.com)
 - **Technical support:** release owner / backend engineer on duty
 - **Approval for production-impacting communications:** product owner
-
-> **Open item:** A real named owner has not been supplied for this implementation slice. Update `docs/specs/operations/on-call.md` and `.github/CODEOWNERS` once the product owner confirms the individual.
 
 ## 3. Scope
 
@@ -90,7 +88,7 @@ If the restore fails or the API does not return healthy within the target window
 ## 10. Drill Record Template
 
 - **Date:** 
-- **Owner:** TBD — product owner to confirm
+- **Owner:** Flinders Doyle (flinders.doyle@gmail.com)
 - **Environment:** staging
 - **Staging volume ID:** 
 - **Snapshot ID:** 
@@ -103,6 +101,8 @@ If the restore fails or the API does not return healthy within the target window
 
 ## 11. Executed Drill Evidence
 
-**NOT YET PERFORMED — requires a human operator with Railway console access to execute against the staging environment and record actual results.**
+**NOT YET PERFORMED — tracked as a follow-up item, owner: Flinders Doyle (flinders.doyle@gmail.com).**
 
-This section must be completed with real evidence only. Do not fabricate timestamps, screenshots, or the measured RTO. Until this is filled in, FR-12 and the Section 1 restore-drill acceptance criterion remain open.
+This requires a human operator with Railway console access to execute the restore drill against the real staging environment and record actual measured results (wall-clock RTO, volume/snapshot IDs, timestamps). It cannot be performed by a build agent in a sandboxed environment and must be completed before M1 release.
+
+This section must be completed with real evidence only. Do not fabricate timestamps, screenshots, or the measured RTO. Until this is filled in, FR-12 and the Section 1 restore-drill acceptance criterion remain open — this is accepted as a known, explicitly tracked gap for this build pass, not a silent omission.

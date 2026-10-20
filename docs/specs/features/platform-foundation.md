@@ -507,7 +507,34 @@ All 11 fail for the expected reason (missing/stubbed implementation — e.g. `/h
 
 ## 6. Review Outcome
 
-_Pending — run `/review`._
+<!-- gate:review verdict=FAIL reviewer=code-reviewer at=2026-10-20T08:49:13Z -->
+
+### Verdict
+
+FAIL — not ready for `/release`.
+
+### Blocking issues
+
+1. [implementation-gap] Section 1 acceptance criterion "a restore drill is completed and recorded before M1 release" is not met. `docs/specs/operations/runbook-restore.md` explicitly states **NOT YET PERFORMED**, so the required execution evidence is missing.
+2. [implementation-gap] Section 3 D-7 alert routing is incomplete. `docs/specs/operations/on-call.md` and `.github/CODEOWNERS` still use placeholder/TBD ownership, which violates the requirement for a named operational owner and auditable escalation path before release.
+3. [implementation-gap] Section 3 D-2 migration gate is not reliably executable as committed. `scripts/migrate.sh` invokes `dotnet ef migrations bundle`, but the repo has no local tool manifest and `.github/workflows/deploy.yml` does not install/restore `dotnet-ef`, so the migrate job depends on ambient runner state.
+
+### Non-blocking suggestions
+
+- Align implementation to TL Decision D-3 by using `AddDbContextCheck`/health-check middleware rather than a hand-rolled readiness endpoint.
+- Reconcile `MigrationModuleOrder` delimiter documentation (`.env.example` uses comma examples while the script expects `:`) to prevent future rollout errors.
+
+### Files of concern
+
+- `docs/specs/operations/runbook-restore.md`
+- `docs/specs/operations/on-call.md`
+- `.github/CODEOWNERS`
+- `.github/workflows/deploy.yml`
+- `scripts/migrate.sh`
+
+### Root cause summary
+
+implementation-gap
 
 ## 7. Release Notes
 

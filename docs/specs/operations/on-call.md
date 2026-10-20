@@ -2,10 +2,10 @@
 
 ## Owner
 
-- **Primary owner:** TBD — product owner to confirm
+- **Primary owner:** Flinders Doyle (flinders.doyle@gmail.com)
 - **Backup owner:** TBD — product owner to confirm
 
-> **Open item:** No real named operational owner was provided for this implementation slice. This document intentionally uses placeholders and must be updated by the product owner before the feature can be considered fully complete.
+> Primary owner confirmed by the product owner on 2026-10-20. The backup owner remains an open item and should be confirmed before launch.
 
 ## Alert classes routed here
 
@@ -24,5 +24,5 @@
 ## Contact record maintenance
 
 - Keep this file in sync with `.github/CODEOWNERS`.
-- Update the placeholder owner entries as soon as the product owner provides the named individual and contact details.
+- The backup owner is still a placeholder — confirm with the product owner before launch.
 - Do not ship a production release with unresolved ownership for backup-failure alerts.

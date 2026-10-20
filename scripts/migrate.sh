@@ -12,6 +12,10 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
   exit 1
 fi
 
+echo "Restoring local .NET tools (dotnet-ef)..."
+(cd "${PROJECT_ROOT}" && dotnet tool restore)
+
+
 CONNECTION_STRING="$(python3 - <<'PY'
 import os
 from urllib.parse import parse_qsl, unquote, urlparse
@@ -64,7 +68,7 @@ for context in "${contexts[@]}"; do
   mkdir -p "${PROJECT_ROOT}/.tmp"
 
   echo "Building migration bundle for ${context}..."
-  dotnet ef migrations bundle \
+  dotnet tool run dotnet-ef migrations bundle \
     --project "${API_PROJECT}" \
     --startup-project "${STARTUP_PROJECT}" \
     --configuration Release \

@@ -1,2 +1,5 @@
-# Placeholder owner for alert/escalation routing until the named individual is confirmed by the product owner.
-docs/specs/operations/on-call.md @tbd-product-owner
+# Alert/escalation routing owner, confirmed by the product owner 2026-10-20.
+# Using an email address since the GitHub username has not been confirmed;
+# replace with a @github-handle once known (CODEOWNERS resolves emails that
+# are verified on the owner's GitHub account, but a handle is more reliable).
+docs/specs/operations/on-call.md flinders.doyle@gmail.com
