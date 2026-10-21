@@ -70,7 +70,7 @@ jobs:
         run: npm run lint
 
       - name: Typecheck
-        run: npm exec tsc --noEmit -p src/web/tsconfig.json
+        run: npm exec tsc -- --noEmit -p src/web/tsconfig.json
 
       - name: Unit tests
         run: dotnet test tests/api/ProjectTracker.Api.Tests/ProjectTracker.Api.Tests.csproj --no-restore --filter "FullyQualifiedName!~Platform"
