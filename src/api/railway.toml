@@ -1,7 +1,6 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "dotnet publish ProjectTracker.Api.csproj -c Release"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "dotnet bin/Release/net8.0/publish/ProjectTracker.Api.dll"
 healthcheckPath = "/healthz/ready"
