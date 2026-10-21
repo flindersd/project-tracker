@@ -128,13 +128,15 @@ _Pending — run `/ux` if this feature has user-facing UI._
 
 ## 3. Technical Approach
 
-<!-- gate:tl verdict=APPROVED at=2026-10-13T00:00:00Z -->
+<!-- gate:tl verdict=APPROVED at=2026-10-21T00:00:00Z -->
 
 ### Verdict
 
 **APPROVED.** The feature is technically feasible, correctly scoped as the infrastructure slice of the former `backend-foundation`, and estimated at **~2 weeks** — comfortably inside the 5-week threshold. No split required.
 
 One acceptance criterion was **factually unachievable as written** and has been renegotiated with the product owner (see D-1 below). Section 1 does not need to be reopened by the BA; the amendment is recorded here and listed in "Spec amendments to fold in".
+
+**Re-reviewed 2026-10-21** following live Railway deployment validation. Verdict remains **APPROVED**. Two changes were made in Section 3 and nowhere else: **D-6 is amended** (Nixpacks → explicit Dockerfile; see "D-6 Amendment"), and **D-11 is added** (the `Board__AllowStubAuthorization` staging bridge and its pre-production gate). Section 1, 2 and 4 are untouched. Neither change alters scope, estimate, or cost.
 
 NFRs confirmed: **yes** — HLD §1.6, restated in Section 1, with the RPO amended by D-1.
 Cost flags: **none new.** All work sits inside the approved CF-1/CF-3 envelope.
@@ -232,6 +234,49 @@ Three services per environment: `api` (container), `web` (static), `postgres`.
 
 **`railway.toml` is wrong today** and must be fixed: `startCommand = "dotnet ProjectTracker.Api.dll"` has no path and will not resolve against the Nixpacks publish output. Pin the publish output directory and reference the DLL by full path. Also set `healthcheckPath = "/healthz/ready"` so Railway's own rollout gate uses the real check (D-3) — this is what delivers the AC "a failed readiness check prevents promotion of an unhealthy API", and it is a platform setting, not application code.
 
+##### D-6 Amendment (2026-10-21, Tech Lead — APPROVED)
+
+**This amends the preceding paragraph only. The build approach changes from "Nixpacks with a corrected `startCommand`" to "an explicit Dockerfile". The original text above is retained for provenance and is superseded; the environment topology, plan posture and `healthcheckPath` decisions in D-6 are unchanged and remain binding.**
+
+The original fix assumed the build driver was Nixpacks and that the only defect was an unqualified DLL path. Live Railway deployment validation on 2026-10-21 disproved both halves of that assumption:
+
+1. **Nixpacks auto-detection resolved the wrong project.** With Root Directory set to `src/api`, the build context contains both `ProjectTracker.Api.csproj` and `ProjectTracker.Api.sln`. Nixpacks preferred the `.sln`, which references `tests/api/ProjectTracker.Api.Tests/*.csproj` — a path outside the scoped build context — producing repeated `MSB3202` "project file not found" failures. No `startCommand` value could have fixed this; the failure is at restore/publish, before start.
+2. **Railway silently switched the build driver from Nixpacks to Railpack mid-session**, with no action on our part. Railpack ignored `railway.toml`'s `buildCommand`/`startCommand` entirely, synthesised its own plan, hit the same `.sln` resolution problem, and additionally targeted a native apphost executable that can never exist given `<UseAppHost>false</UseAppHost>` in the csproj. **This is the decisive finding:** the prior decision rested on a builder whose behaviour Railway can change unilaterally, and whose configuration surface the replacement builder does not honour. That is not a stable platform contract.
+
+**Decision: the API service is built from an explicit `src/api/Dockerfile` (multi-stage `sdk:8.0` build → `aspnet:8.0` runtime), with `railway.toml` set to `builder = "DOCKERFILE"`.** `buildCommand`/`startCommand` are removed from `railway.toml`; the start command is owned by the Dockerfile `ENTRYPOINT`, which binds `ASPNETCORE_URLS` to Railway's injected `$PORT` at container start.
+
+Rationale:
+- **It removes auto-detection entirely.** Railway builds via Docker when a Dockerfile is present. Neither Nixpacks nor Railpack gets a vote, so a future Railway-side builder change cannot silently break the deploy.
+- **The project to build is named explicitly** (`dotnet restore/publish ProjectTracker.Api.csproj`), so the sibling `.sln` is irrelevant and the out-of-context test project is never resolved. This addresses the root cause rather than the symptom.
+- **The build is reproducible locally.** `docker build` runs the same image CI and Railway run. The prior Nixpacks plan was only observable by deploying, which is why this defect reached live infrastructure in the first place.
+- It is boring, well-established technology already understood by the team, and introduces no new vendor or dependency.
+
+Verified end-to-end before approval: `docker build` succeeds; the container runs; `GET /healthz/live` returns 200 and `GET /healthz/ready` returns 503 with a named failing check against a real running container — i.e. D-3's real readiness check is exercised through the production image, not just in test.
+
+**Cost impact: none. Confirmed, not assumed.** Railway meters compute, memory, egress and volume identically regardless of build driver (verified against `railway.com/pricing`, rates as recorded in D-6 above); build minutes are not separately billed on Hobby or Pro. The Docker image adds no runtime footprint beyond what the Nixpacks-produced .NET runtime image would have. **CF-1 and CF-3 envelopes are unchanged and no new product-owner cost approval is required.**
+
+Consequential changes, all in scope for this feature:
+- `src/api/Dockerfile` and `src/api/.dockerignore` — new.
+- `src/api/nixpacks.toml` — deleted, superseded.
+- `src/api/railway.toml` — `builder = "DOCKERFILE"`, `dockerfilePath = "Dockerfile"`, `healthcheckPath = "/healthz/ready"` retained.
+- The Section 4 test `RailwayConfigurationTests.StartCommand_references_a_fully_qualified_dll_path` asserted a mechanism that no longer exists. Re-pointing it at the Dockerfile-based mechanism is **correct and approved** — the test's intent (the service has a resolvable, explicit start path) is preserved; only the mechanism it verifies changed. This is not a weakening of coverage.
+- `docs/specs/operations/environments.md` — stale `ASPNETCORE_URLS` entries removed (the `ENTRYPOINT` binds `$PORT` dynamically) and the Step 4 API-service provisioning steps re-written for the Dockerfile builder.
+
+**No knock-on effect beyond `platform-foundation`.** The Module/File Breakdown table above is amended by this note (Dockerfile/`.dockerignore` added, `railway.toml` row restated); no other feature consumes the build mechanism. The outstanding HLD `apps/` → `src/` correction recorded under "Standards Compliance" is unaffected by this change — it was already required and remains so.
+
+#### D-11 — `Board__AllowStubAuthorization` is a staging-only bridge with a hard pre-production gate
+
+Surfaced by the same 2026-10-21 deploy validation: the deployed container crash-looped with *"Stub board authorization is only allowed in Development with explicit opt-in."* This is **correct behaviour**, not a defect — `board-data-model`'s R-2 mitigation refusing to run stub authorization in a non-Development environment. It fires because `auth-foundation` has not shipped and `StubBoardAuthorizationService` is still the only `IBoardAuthorizationService` implementation.
+
+**Decision: set `Board__AllowStubAuthorization=true` in the `staging` environment only, as an explicit, temporary, documented bridge. It must never be set in production.** Staging with stub auth treats every request as a `Member` on every board with no real identity check; that is acceptable for a non-public staging environment used to validate platform deliverables (health gating, migration pipeline, logging, restore drill), and it is the only way to exercise those deliverables before `auth-foundation` lands. Production must continue to fail fast and refuse to start — that is the entire point of the guard, and weakening it would convert a loud failure into a silent total data exposure.
+
+This is a genuine cross-feature boundary: the *guard* is owned by `board-data-model` (R-2), the *environment variable that opts into it* is owned by `platform-foundation`'s deployment configuration. It is therefore recorded in **both** specs, plus the operational source of truth:
+- `docs/specs/operations/environments.md` — Step 5 (staging, with the removal note) and Step 6 (explicit "do NOT set in production").
+- `docs/specs/features/board-data-model.md` — R-2 annotated with the staging bridge.
+- Here, as a named gate.
+
+**Pre-production checklist item (hard gate, not a backlog item):** before any production deploy of the API, confirm that `Board__AllowStubAuthorization` is absent from the `production` environment. Once `auth-foundation` ships, the variable must be removed from `staging` as well and `StubBoardAuthorizationService` deleted. Neither the pilot nor production may open to real users while stub authorization is active in the environment serving them.
+
 #### D-7 — Monitoring: Sentry for errors, Railway-native for uptime, GitHub for CI cost
 
 Deliberately minimal — three tools, all already approved under CF-1/CF-3, no new vendor.
@@ -298,7 +343,10 @@ This approach **references** the binding standards rather than re-deciding them:
 | `src/api/ProjectTracker.Api.csproj` | + Serilog.AspNetCore, Sentry.AspNetCore, Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore |
 | `src/api/appsettings*.json` | Cors, Serilog, Sentry, health-check sections |
 | `src/api/.env.example` | document every required variable |
-| `src/api/railway.toml` | fix `startCommand`, add `healthcheckPath` (D-6) |
+| `src/api/railway.toml` | ~~fix `startCommand`~~, add `healthcheckPath` (D-6); **amended 2026-10-21 — `builder = "DOCKERFILE"`, `buildCommand`/`startCommand` removed (D-6 Amendment)** |
+| `src/api/Dockerfile` | **new (D-6 Amendment)** — multi-stage SDK build → aspnet runtime; `ENTRYPOINT` binds `$PORT` |
+| `src/api/.dockerignore` | **new (D-6 Amendment)** |
+| `src/api/nixpacks.toml` | **deleted (D-6 Amendment)** — superseded |
 | `.github/workflows/ci.yml` | **new** — fast + full gates (D-9) |
 | `.github/workflows/deploy.yml` | **new** — bundle → migrate → deploy, per environment (D-2) |
 | `.github/CODEOWNERS` | **new** — alert/escalation ownership |
@@ -494,7 +542,11 @@ All 11 fail for the expected reason (missing/stubbed implementation — e.g. `/h
 
 ### Deviations from spec
 
-- None in scope/behavior. One test-fix deviation: `DatabaseUrlTranslationTests.cs` required a one-line fix (apply migrations in test setup) after the Chunk 3 removal of a hidden auto-migrate side effect exposed that the test never isolated DB-URI-translation behavior on its own. This was executed by the `tester` subagent per the STUCK-report triage protocol, not by `developer-implementer`.
+- **Railway build mechanism changed from Nixpacks to an explicit Dockerfile — TL-reviewed and APPROVED 2026-10-21 (see Section 3, "D-6 Amendment"). This is no longer a deviation; it is the standing decision.** Live deployment validation showed the original D-6 fix (correct `startCommand` under Nixpacks) could not work: Nixpacks resolved the sibling `ProjectTracker.Api.sln` instead of the csproj and failed with `MSB3202` on a test project outside the `src/api` build context, and Railway then silently switched the build driver to Railpack, which ignored `railway.toml`'s `buildCommand`/`startCommand` altogether. Resolution: `src/api/Dockerfile` + `src/api/.dockerignore` added, `src/api/nixpacks.toml` deleted, `railway.toml` set to `builder = "DOCKERFILE"` with `healthcheckPath` retained. Verified end-to-end locally (`docker build` succeeds; container runs; `/healthz/live` 200, `/healthz/ready` 503 with a named failing check). No cost impact — CF-1/CF-3 envelopes unchanged (confirmed against Railway pricing, not assumed).
+- `tests/api/ProjectTracker.Api.Tests/Platform/RailwayConfigurationTests.cs` was updated by the `tester` subagent to verify the Dockerfile-based start mechanism instead of the now-obsolete `railway.toml` `startCommand` key. **Approved** — the test's intent is unchanged; only the mechanism it asserts against moved. Coverage is not weakened.
+- `docs/specs/operations/environments.md` updated: stale `ASPNETCORE_URLS` entries removed (the Dockerfile `ENTRYPOINT` binds Railway's injected `$PORT` dynamically), Step 4 API-service provisioning re-written for the Dockerfile builder, and `Board__AllowStubAuthorization=true` added to staging-only variables with an explanatory note and an explicit "do NOT set in production" warning.
+- One test-fix deviation (pre-existing): `DatabaseUrlTranslationTests.cs` required a one-line fix (apply migrations in test setup) after the Chunk 3 removal of a hidden auto-migrate side effect exposed that the test never isolated DB-URI-translation behavior on its own. This was executed by the `tester` subagent per the STUCK-report triage protocol, not by `developer-implementer`.
+- No scope or behavioural deviation from Section 1 remains.
 
 ### Open risks
 
@@ -502,12 +554,13 @@ All 11 fail for the expected reason (missing/stubbed implementation — e.g. `/h
 - **Named on-call owner (D-7 / Section 1 OQ-2) is a placeholder.** `docs/specs/operations/on-call.md` and `.github/CODEOWNERS` need product-owner confirmation of the real named individual before this is release-ready.
 - **External uptime monitor is documented but not provisioned** — no third-party uptime-check tool has actually been configured against `/healthz/ready` yet; this is a manual console/vendor-signup step outside this build agent's reach.
 - **Chunk 1's Railway console provisioning** (project/environments/services/backup schedule) is a manual checklist per the spec and has not been confirmed as executed by a human operator — see `docs/specs/operations/environments.md` §7 for the outstanding steps.
+- **`Board__AllowStubAuthorization=true` is set in staging as a temporary bridge (D-11).** Staging currently runs with stub board authorization — every request is treated as a `Member` on every board with no identity check. This is accepted only because staging is non-public and `auth-foundation` has not shipped. **Hard pre-production gate: confirm this variable is absent from the `production` environment before any production deploy, and remove it from staging the moment `auth-foundation` lands.** Production is expected to crash-loop on this guard until `auth-foundation` ships — that is correct behaviour, not a bug to work around.
 - Railway CLI deploy commands in `deploy.yml` (`npx @railway/cli ... up --service api --environment staging`) are a reasonable placeholder and may need minor adjustment once real Railway project/service names are provisioned.
 - GitHub Environment protection rule (required reviewer) for the `production` environment must still be configured manually in the GitHub repository UI — the workflow only references `environment: production` so the setting has something to attach to.
 
 ## 6. Review Outcome
 
-<!-- gate:review verdict=FAIL reviewer=code-reviewer at=2026-10-20T08:49:13Z -->
+<!-- gate:review verdict=FAIL reviewer=code-reviewer at=2026-10-20T09:35:13Z -->
 
 ### Verdict
 
@@ -515,22 +568,19 @@ FAIL — not ready for `/release`.
 
 ### Blocking issues
 
-1. [implementation-gap] Section 1 acceptance criterion "a restore drill is completed and recorded before M1 release" is not met. `docs/specs/operations/runbook-restore.md` explicitly states **NOT YET PERFORMED**, so the required execution evidence is missing.
-2. [implementation-gap] Section 3 D-7 alert routing is incomplete. `docs/specs/operations/on-call.md` and `.github/CODEOWNERS` still use placeholder/TBD ownership, which violates the requirement for a named operational owner and auditable escalation path before release.
-3. [implementation-gap] Section 3 D-2 migration gate is not reliably executable as committed. `scripts/migrate.sh` invokes `dotnet ef migrations bundle`, but the repo has no local tool manifest and `.github/workflows/deploy.yml` does not install/restore `dotnet-ef`, so the migrate job depends on ambient runner state.
+1. [implementation-gap] Section 1 acceptance criterion and FR-12 require a completed, recorded restore drill before M1 release. `docs/specs/operations/runbook-restore.md` still states **NOT YET PERFORMED** in "Executed Drill Evidence", so the required evidence gate is still open.
+2. [implementation-gap] Section 1 monitoring/operations acceptance criteria are still not fully realized in production-ready form: Section 5 notes that the external `/healthz/ready` uptime monitor is documented but not actually provisioned, and Railway environment provisioning/backups are still an unconfirmed manual checklist. These are release-gating platform deliverables, not optional follow-up docs.
 
 ### Non-blocking suggestions
 
-- Align implementation to TL Decision D-3 by using `AddDbContextCheck`/health-check middleware rather than a hand-rolled readiness endpoint.
-- Reconcile `MigrationModuleOrder` delimiter documentation (`.env.example` uses comma examples while the script expects `:`) to prevent future rollout errors.
+- Reconcile `MigrationModuleOrder` documentation with runtime parsing (`.env.example` shows comma-separated values while `scripts/migrate.sh` parses `:`-separated contexts) to prevent future rollout mistakes.
+- Consider replacing the hand-rolled readiness endpoint implementation with `AddDbContextCheck` + `MapHealthChecks` to match Section 3 D-3 exactly.
 
 ### Files of concern
 
 - `docs/specs/operations/runbook-restore.md`
-- `docs/specs/operations/on-call.md`
-- `.github/CODEOWNERS`
-- `.github/workflows/deploy.yml`
-- `scripts/migrate.sh`
+- `docs/specs/operations/environments.md`
+- `docs/specs/features/platform-foundation.md` (Section 5 open risks)
 
 ### Root cause summary
 

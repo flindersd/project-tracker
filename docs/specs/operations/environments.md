@@ -274,15 +274,15 @@ Railway will create a managed PostgreSQL instance. Click the "⚙️" menu on th
 ### Step 4 — Configure the API service
 
 1. Click "Add service".
-2. Choose "Container build".
+2. Choose "GitHub Repo" → repository `Project Tracker`.
 3. **Name:** `api`.
-4. Choose repository: `Project Tracker` → `src/api`.
-5. Click "Add service".
-6. Set `buildCommand = "dotnet publish src/api/ProjectTracker.Api.csproj -c Release"`.
-7. Set `startCommand = "dotnet publish/src/api/bin/Release/net8.0/ProjectTracker.Api.dll"`.
-8. Click "Add service".
+4. Open the service → **"Settings"** → **"Build"** and set **Root Directory** to `src/api`.
+5. Confirm the **Builder** shows **Dockerfile**. Railway detects `src/api/Dockerfile` automatically; `src/api/railway.toml` also pins `builder = "DOCKERFILE"` and `dockerfilePath = "Dockerfile"`.
+6. Leave **Build Command** and **Start Command** **empty**. They are owned by the Dockerfile and must not be set here — a value in either field overrides the Dockerfile and reintroduces the builder ambiguity this setup exists to remove.
 
-> **Verify:** The service has status "Active".
+> **Why a Dockerfile and not Nixpacks:** with Root Directory `src/api`, auto-detection (Nixpacks, and latterly Railpack) resolves the sibling `ProjectTracker.Api.sln`, which references the test project outside this build context, and fails with `MSB3202`. Railway also switched build drivers unannounced mid-setup, ignoring `railway.toml`'s build/start commands. An explicit Dockerfile removes auto-detection entirely. See `docs/specs/features/platform-foundation.md` Section 3, "D-6 Amendment".
+
+> **Verify:** The build log shows Docker build stages (`sdk:8.0` → `aspnet:8.0`), and the service reaches status "Active".
 
 ### Step 5 — Configure the environment variables (staging)
 
