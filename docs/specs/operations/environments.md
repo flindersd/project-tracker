@@ -292,11 +292,15 @@ Railway will create a managed PostgreSQL instance. Click the "⚙️" menu on th
 
 | Key | Value |
 |-----|-------|
-| `ASPNETCORE_URLS` | `http://0.0.0.0:5000` |
 | `DATABASE_URL` | `<copied-from-step-2>` |
 | `MigrationModuleOrder` | `BoardDbContext:TaskDbContext:UserDbContext:MembershipDbContext` |
+| `Board__AllowStubAuthorization` | `true` |
 
-> **Note:** For now, leave `Sentry_Dsn` and `Logging__*` unset. They can be added when the feature is approved.
+> **Note:** `ASPNETCORE_URLS` does not need to be set — `src/api/Dockerfile`'s `ENTRYPOINT` binds to Railway's injected `$PORT` dynamically at container start.
+>
+> **`Board__AllowStubAuthorization`** is a temporary bridge: `auth-foundation` has not shipped yet, so `StubBoardAuthorizationService` is the only `IBoardAuthorizationService` implementation available. It deliberately refuses to start in any non-Development environment unless explicitly opted in, to prevent accidentally shipping stub auth (every request treated as a `Member` on every board, no real identity check) to a real environment unnoticed. **Remove this variable once `auth-foundation` lands.** Note the double underscore (`__`), not a colon — ASP.NET Core's environment-variable configuration provider requires it.
+>
+> For now, leave `Sentry_Dsn` and `Logging__*` unset. They can be added when the feature is approved.
 
 4. Click **"Save and redeploy"**.
 
@@ -310,12 +314,15 @@ Railway will create a managed PostgreSQL instance. Click the "⚙️" menu on th
 
 | Key | Value |
 |-----|-------|
-| `ASPNETCORE_URLS` | `http://0.0.0.0:5000` |
 | `DATABASE_URL` | `<copied-from-step-2>` |
 | `Sentry_Dsn` | `<Sentry DSN or leave empty>` |
 | `Logging__MinimumLevel` | `Warning` |
 | `Logging__AllowedProperties` | `Microsoft.AspNetCore:Microsoft.EntityFrameworkCore.Database.Command` |
 | `MigrationModuleOrder` | `BoardDbContext:TaskDbContext:UserDbContext:MembershipDbContext` |
+
+> **Do NOT set `Board__AllowStubAuthorization` in production.** Production must fail fast and refuse to start with stub authorization — that is the whole point of the guard. Production access control is blocked on `auth-foundation` shipping first.
+>
+> `ASPNETCORE_URLS` does not need to be set here either, for the same reason as staging.
 
 4. Click **"Save and redeploy"**.
 
